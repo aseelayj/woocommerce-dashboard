@@ -1,4 +1,5 @@
 import { storesService } from './supabase-stores';
+import { apiCache } from './cache';
 
 interface WooCommerceError {
   code: string;
@@ -88,6 +89,14 @@ export class WooCommerceAPI {
     if (params?.offset) queryParams.append('offset', params.offset.toString());
 
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const cacheKey = `orders:${this.baseUrl}:${query}`;
+    
+    // Check cache first
+    const cached = apiCache.get<any>(cacheKey);
+    if (cached) {
+      console.log('Returning cached orders');
+      return cached;
+    }
     
     try {
       const response = await fetch(`${this.baseUrl}/orders${query}`, {
@@ -112,11 +121,16 @@ export class WooCommerceAPI {
       const totalOrders = response.headers.get('X-WP-Total');
       const totalPages = response.headers.get('X-WP-TotalPages');
 
-      return {
+      const result = {
         orders,
         total: totalOrders ? parseInt(totalOrders) : orders.length,
         totalPages: totalPages ? parseInt(totalPages) : 1,
       };
+      
+      // Cache the result
+      apiCache.set(cacheKey, result, 2 * 60 * 1000); // Cache for 2 minutes
+      
+      return result;
     } catch (error) {
       console.error('Error fetching orders:', error);
       if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -131,10 +145,19 @@ export class WooCommerceAPI {
   }
 
   async updateOrder(id: number, data: any) {
-    return this.request<any>(`/orders/${id}`, {
+    const result = await this.request<any>(`/orders/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+    
+    // Clear order cache when updating
+    apiCache.clear('orders:');
+    
+    return result;
+  }
+
+  async updateOrderStatus(id: number, status: string) {
+    return this.updateOrder(id, { status });
   }
 
   async deleteOrder(id: number, force: boolean = false) {
@@ -257,6 +280,58 @@ export class WooCommerceAPI {
   // Reports endpoints
   async getReports() {
     return this.request<any[]>('/reports');
+  }
+  
+  // Get total revenue efficiently
+  async getTotalRevenue(params?: { after?: string; before?: string }) {
+    const cacheKey = `revenue:${this.baseUrl}:${params?.after || ''}:${params?.before || ''}`;
+    
+    // Check cache
+    const cached = apiCache.get<number>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+    
+    let totalRevenue = 0;
+    let page = 1;
+    const perPage = 100;
+    let hasMore = true;
+    
+    while (hasMore) {
+      try {
+        const response = await this.getOrders({
+          page,
+          per_page: perPage,
+          after: params?.after,
+          before: params?.before,
+          orderby: 'date',
+          order: 'desc'
+        });
+        
+        // Sum revenue from this page
+        const pageRevenue = response.orders.reduce((sum: number, order: any) => 
+          sum + parseFloat(order.total || '0'), 0
+        );
+        totalRevenue += pageRevenue;
+        
+        // Check if there are more pages
+        hasMore = page < response.totalPages;
+        page++;
+        
+        // Small delay to avoid rate limiting
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        console.error(`Error fetching page ${page}:`, error);
+        break;
+      }
+    }
+    
+    // Cache for 5 minutes
+    apiCache.set(cacheKey, totalRevenue, 5 * 60 * 1000);
+    
+    return totalRevenue;
   }
 
   async getSalesReport(params?: {

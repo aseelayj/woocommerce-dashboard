@@ -18,6 +18,9 @@ import {
 import { Shop, Order } from '@/types';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { apiCache } from '@/lib/cache';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { DateRange } from 'react-day-picker';
 
 interface DashboardProps {
   activeShop: Shop;
@@ -51,10 +54,15 @@ export function Dashboard({ activeShop }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [fetchAllOrders, setFetchAllOrders] = useState(false);
+  const [isFromCache, setIsFromCache] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 29),
+    to: new Date()
+  });
 
   useEffect(() => {
     loadDashboardData();
-  }, [activeShop]);
+  }, [activeShop, dateRange]);
 
   const handleFetchAllOrders = () => {
     setFetchAllOrders(true);
@@ -64,23 +72,62 @@ export function Dashboard({ activeShop }: DashboardProps) {
   const loadDashboardData = async (forceLoadAll = false) => {
     if (!activeShop) return;
 
+    // Create cache key based on shop and date range
+    const cacheKey = `dashboard:${activeShop.id}:${dateRange?.from?.toISOString() || 'all'}:${dateRange?.to?.toISOString() || 'all'}`;
+    
+    // Check if we have cached dashboard stats
+    if (!forceLoadAll) {
+      const cachedStats = apiCache.get<DashboardStats>(cacheKey);
+      if (cachedStats) {
+        setStats(cachedStats);
+        setIsFromCache(true);
+        setLoading(false);
+        
+        // Still fetch recent orders for display
+        const api = new WooCommerceAPI(isUsingRealAPI() ? activeShop.id : activeShop);
+        const dateFilters: any = {};
+        if (dateRange?.from) dateFilters.dateFrom = format(dateRange.from, 'yyyy-MM-dd');
+        if (dateRange?.to) dateFilters.dateTo = format(dateRange.to, 'yyyy-MM-dd');
+        
+        const ordersResp = await api.getOrders(dateFilters, { page: 1, limit: 5 });
+        setRecentOrders(
+          ordersResp.orders.map(order => ({
+            id: order.id,
+            number: order.number,
+            customer: `${order.customer.first_name} ${order.customer.last_name}`,
+            total: order.total,
+            status: order.status,
+            date: order.date_created
+          }))
+        );
+        return;
+      }
+    }
+    
+    
+    setIsFromCache(false);
     setLoading(true);
     try {
       const api = new WooCommerceAPI(isUsingRealAPI() ? activeShop.id : activeShop);
       
-      // Get sales report for totals (last 30 days)
+      // Get sales report for totals based on selected date range
       let totalRevenue = 0;
       let totalOrdersCount = 0;
       
+      // Prepare date filters
+      const dateFilters: any = {};
+      if (dateRange?.from) {
+        dateFilters.dateFrom = format(dateRange.from, 'yyyy-MM-dd');
+      }
+      if (dateRange?.to) {
+        dateFilters.dateTo = format(dateRange.to, 'yyyy-MM-dd');
+      }
+      
       try {
         // Try to get sales report for accurate totals
-        const currentDate = new Date();
-        const thirtyDaysAgo = format(subDays(currentDate, 30), 'yyyy-MM-dd');
-        const today = format(currentDate, 'yyyy-MM-dd');
-        
         const salesReport = await api.getSalesReport({
-          date_min: thirtyDaysAgo,
-          date_max: today
+          date_min: dateFilters.dateFrom,
+          date_max: dateFilters.dateTo
         });
         console.log('Sales report:', salesReport);
         
@@ -93,32 +140,36 @@ export function Dashboard({ activeShop }: DashboardProps) {
       }
       
       // Get orders for display and additional stats
-      const currentPeriodResponse = await api.getOrders({}, { 
+      const currentPeriodResponse = await api.getOrders(dateFilters, { 
         page: 1, 
         limit: 100, 
         sortBy: 'date_created', 
         sortOrder: 'desc' 
       });
       
-      // Get orders for previous period (30-60 days ago) for comparison
+      // Get orders for previous period for comparison
       let previousOrders: any[] = [];
-      try {
-        const sixtyDaysAgo = format(subDays(new Date(), 60), 'yyyy-MM-dd');
-        const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
-        
-        const previousPeriodResponse = await api.getOrders({
-          dateFrom: sixtyDaysAgo,
-          dateTo: thirtyDaysAgo
-        }, { 
-          page: 1, 
-          limit: 100, 
-          sortBy: 'date_created', 
-          sortOrder: 'desc' 
-        });
-        previousOrders = previousPeriodResponse.orders;
-      } catch (error) {
-        console.warn('Failed to fetch previous period data, continuing without comparison:', error);
-        // Continue without comparison data
+      if (dateRange?.from && dateRange?.to) {
+        try {
+          // Calculate previous period of same length
+          const periodLength = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24));
+          const previousFrom = format(subDays(dateRange.from, periodLength), 'yyyy-MM-dd');
+          const previousTo = format(subDays(dateRange.from, 1), 'yyyy-MM-dd');
+          
+          const previousPeriodResponse = await api.getOrders({
+            dateFrom: previousFrom,
+            dateTo: previousTo
+          }, { 
+            page: 1, 
+            limit: 100, 
+            sortBy: 'date_created', 
+            sortOrder: 'desc' 
+          });
+          previousOrders = previousPeriodResponse.orders;
+        } catch (error) {
+          console.warn('Failed to fetch previous period data, continuing without comparison:', error);
+          // Continue without comparison data
+        }
       }
 
       const currentOrders = currentPeriodResponse.orders;
@@ -141,7 +192,7 @@ export function Dashboard({ activeShop }: DashboardProps) {
             try {
               setLoadingMessage(`Fetching orders: page ${page} of ${totalPages}...`);
               console.log(`Fetching page ${page} of ${totalPages}...`);
-              const pageResponse = await api.getOrders({}, { 
+              const pageResponse = await api.getOrders(dateFilters, { 
                 page, 
                 limit: 100, 
                 sortBy: 'date_created', 
@@ -167,11 +218,61 @@ export function Dashboard({ activeShop }: DashboardProps) {
         }
       }
 
-      // Calculate stats from fetched orders for status breakdown
-      const completedOrders = currentOrders.filter(order => order.status === 'completed').length;
-      const pendingOrders = currentOrders.filter(order => order.status === 'pending').length;
-      const processingOrders = currentOrders.filter(order => order.status === 'processing').length;
-      const failedOrders = currentOrders.filter(order => order.status === 'failed').length;
+      // Fetch order counts by status
+      let completedOrders = 0;
+      let pendingOrders = 0;
+      let processingOrders = 0;
+      let failedOrders = 0;
+      
+      // Fetch counts for each status with caching
+      const statusCacheKeys = {
+        completed: `status:${activeShop.id}:completed:${dateFilters.dateFrom || 'all'}:${dateFilters.dateTo || 'all'}`,
+        pending: `status:${activeShop.id}:pending:${dateFilters.dateFrom || 'all'}:${dateFilters.dateTo || 'all'}`,
+        processing: `status:${activeShop.id}:processing:${dateFilters.dateFrom || 'all'}:${dateFilters.dateTo || 'all'}`,
+        failed: `status:${activeShop.id}:failed:${dateFilters.dateFrom || 'all'}:${dateFilters.dateTo || 'all'}`
+      };
+      
+      // Check cache first
+      const cachedCounts = apiCache.getMultiple<number>([
+        statusCacheKeys.completed,
+        statusCacheKeys.pending,
+        statusCacheKeys.processing,
+        statusCacheKeys.failed
+      ]);
+      
+      if (cachedCounts.every(count => count !== null)) {
+        [completedOrders, pendingOrders, processingOrders, failedOrders] = cachedCounts as number[];
+      } else {
+        try {
+          const [completedResp, pendingResp, processingResp, failedResp] = await Promise.all([
+            api.getOrders({ ...dateFilters, status: 'completed' }, { page: 1, limit: 1 }),
+            api.getOrders({ ...dateFilters, status: 'pending' }, { page: 1, limit: 1 }),
+            api.getOrders({ ...dateFilters, status: 'processing' }, { page: 1, limit: 1 }),
+            api.getOrders({ ...dateFilters, status: 'failed' }, { page: 1, limit: 1 })
+          ]);
+          
+          completedOrders = completedResp.total;
+          pendingOrders = pendingResp.total;
+          processingOrders = processingResp.total;
+          failedOrders = failedResp.total;
+          
+          // Cache the counts for 3 minutes
+          apiCache.setMultiple([
+            { key: statusCacheKeys.completed, data: completedOrders, ttl: 3 * 60 * 1000 },
+            { key: statusCacheKeys.pending, data: pendingOrders, ttl: 3 * 60 * 1000 },
+            { key: statusCacheKeys.processing, data: processingOrders, ttl: 3 * 60 * 1000 },
+            { key: statusCacheKeys.failed, data: failedOrders, ttl: 3 * 60 * 1000 }
+          ]);
+        } catch (error) {
+          console.error('Failed to fetch order status counts:', error);
+          // Fallback to counting from current orders
+          completedOrders = currentOrders.filter(order => order.status === 'completed').length;
+          pendingOrders = currentOrders.filter(order => order.status === 'pending').length;
+          processingOrders = currentOrders.filter(order => order.status === 'processing').length;
+          failedOrders = currentOrders.filter(order => order.status === 'failed').length;
+        }
+      }
+      
       const averageOrderValue = totalOrdersCount > 0 ? totalRevenue / totalOrdersCount : 0;
 
       // Calculate previous period stats for growth comparison
@@ -182,7 +283,7 @@ export function Dashboard({ activeShop }: DashboardProps) {
       const revenueGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0;
       const ordersGrowth = previousOrderCount > 0 ? ((totalOrdersCount - previousOrderCount) / previousOrderCount) * 100 : 0;
 
-      setStats({
+      const statsData = {
         totalRevenue,
         totalOrders: totalOrdersCount,
         completedOrders,
@@ -193,7 +294,12 @@ export function Dashboard({ activeShop }: DashboardProps) {
         revenueGrowth,
         ordersGrowth,
         isPartialData: currentPeriodResponse.total > 100 && !fetchAllOrders
-      });
+      };
+      
+      setStats(statsData);
+      
+      // Cache the dashboard stats for 5 minutes
+      apiCache.set(cacheKey, statsData, 5 * 60 * 1000);
 
       // Set recent orders (last 5)
       setRecentOrders(
@@ -272,19 +378,45 @@ export function Dashboard({ activeShop }: DashboardProps) {
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-gray-900">Dashboard Overview</h2>
-          <p className="text-sm md:text-base text-gray-600">Welcome back! Here's what's happening with {activeShop.name}.</p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl md:text-2xl font-bold text-gray-900">Dashboard Overview</h2>
+            <p className="text-sm md:text-base text-gray-600">Welcome back! Here's what's happening with {activeShop.name}.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isFromCache && !loading && (
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                Cached data
+              </span>
+            )}
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                apiCache.clear(); // Clear all cache
+                loadDashboardData();
+              }} 
+              className="gap-2 border-gray-200 hover:bg-gray-50"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh Data
+            </Button>
+          </div>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={loadDashboardData} 
-          className="gap-2 border-gray-200 hover:bg-gray-50 w-full md:w-auto"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh Data
-        </Button>
+        
+        {/* Date Filter */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <DateRangePicker
+            value={dateRange}
+            onValueChange={setDateRange}
+            className="w-full sm:w-auto"
+          />
+          {dateRange && (
+            <div className="text-sm text-gray-600">
+              Showing data from {format(dateRange.from!, 'MMM dd, yyyy')} to {format(dateRange.to!, 'MMM dd, yyyy')}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}

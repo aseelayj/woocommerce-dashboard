@@ -10,6 +10,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { DateRange } from 'react-day-picker';
 import {
   Select,
   SelectContent,
@@ -54,6 +57,30 @@ interface OrdersTableProps {
   pagination: PaginationOptions;
 }
 
+// Helper function to determine which page numbers to show
+function getPageNumber(index: number, currentPage: number, totalPages: number): number | null {
+  if (totalPages <= 5) {
+    return index + 1;
+  }
+  
+  if (index === 0) return 1;
+  if (index === 4) return totalPages;
+  
+  if (currentPage <= 3) {
+    if (index <= 2) return index + 1;
+    if (index === 3) return null; // ellipsis
+  } else if (currentPage >= totalPages - 2) {
+    if (index === 1) return null; // ellipsis
+    if (index >= 2) return totalPages - 4 + index;
+  } else {
+    if (index === 1) return null; // ellipsis
+    if (index === 2) return currentPage;
+    if (index === 3) return null; // ellipsis
+  }
+  
+  return null;
+}
+
 export function OrdersTable({
   orders,
   loading,
@@ -65,6 +92,14 @@ export function OrdersTable({
   pagination,
 }: OrdersTableProps) {
   const [localSearch, setLocalSearch] = useState(filters.search || '');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+    filters.dateFrom || filters.dateTo
+      ? {
+          from: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
+          to: filters.dateTo ? new Date(filters.dateTo) : undefined,
+        }
+      : undefined
+  );
 
   const stats = useMemo(() => {
     const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
@@ -89,6 +124,15 @@ export function OrdersTable({
     onFiltersChange({ 
       ...filters, 
       status: status === 'all' ? undefined : status as OrderStatus 
+    });
+  };
+
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    setDateRange(range);
+    onFiltersChange({
+      ...filters,
+      dateFrom: range?.from ? format(range.from, 'yyyy-MM-dd') : undefined,
+      dateTo: range?.to ? format(range.to, 'yyyy-MM-dd') : undefined,
     });
   };
 
@@ -211,37 +255,58 @@ export function OrdersTable({
               </p>
             </div>
             
-            <div className="flex flex-col md:flex-row gap-3">
-              {/* Search */}
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <Input
-                  placeholder="Search orders, customers..."
-                  value={localSearch}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className="pl-10 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
-                />
-              </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col md:flex-row gap-3">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    placeholder="Search orders, customers..."
+                    value={localSearch}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    className="pl-10 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
+                  />
+                </div>
 
-              {/* Status Filter */}
-              <Select
-                value={filters.status || 'all'}
-                onValueChange={handleStatusFilter}
-              >
-                <SelectTrigger className="w-full md:w-40 border-gray-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="on-hold">On Hold</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="refunded">Refunded</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                </SelectContent>
-              </Select>
+                {/* Status Filter */}
+                <Select
+                  value={filters.status || 'all'}
+                  onValueChange={handleStatusFilter}
+                >
+                  <SelectTrigger className="w-full md:w-40 border-gray-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="processing">Processing</SelectItem>
+                    <SelectItem value="on-hold">On Hold</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="refunded">Refunded</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Date Filter */}
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <DateRangePicker
+                  value={dateRange}
+                  onValueChange={handleDateRangeChange}
+                  className="w-full sm:w-auto"
+                />
+                {dateRange && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDateRangeChange(undefined)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    Clear dates
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -513,6 +578,84 @@ export function OrdersTable({
             </Table>
           </div>
         </CardContent>
+        
+        {/* Pagination */}
+        {total > 0 && (
+          <div className="border-t border-gray-100 px-4 py-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-sm text-gray-600">
+                Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, total)} of {total} orders
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPaginationChange({ ...pagination, page: pagination.page - 1 })}
+                  disabled={pagination.page === 1 || loading}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {/* Page numbers */}
+                  {Array.from({ length: Math.min(5, Math.ceil(total / pagination.limit)) }, (_, i) => {
+                    const pageNumber = getPageNumber(i, pagination.page, Math.ceil(total / pagination.limit));
+                    if (pageNumber === null) {
+                      return (
+                        <span key={i} className="px-2 text-gray-400">...</span>
+                      );
+                    }
+                    return (
+                      <Button
+                        key={i}
+                        variant={pageNumber === pagination.page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => onPaginationChange({ ...pagination, page: pageNumber })}
+                        disabled={loading}
+                        className="h-8 w-8 p-0"
+                      >
+                        {pageNumber}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPaginationChange({ ...pagination, page: pagination.page + 1 })}
+                  disabled={pagination.page >= Math.ceil(total / pagination.limit) || loading}
+                  className="gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Show</span>
+                <Select
+                  value={pagination.limit.toString()}
+                  onValueChange={(value) => onPaginationChange({ ...pagination, limit: parseInt(value), page: 1 })}
+                >
+                  <SelectTrigger className="w-16 h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-gray-600">per page</span>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );

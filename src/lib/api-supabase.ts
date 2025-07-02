@@ -53,7 +53,10 @@ export class SupabaseWooCommerceAPI {
     };
     
     // Only add optional parameters if they're defined
-    if (filters.status) params.status = filters.status;
+    if (filters.status) {
+      // Handle both single status and array of statuses
+      params.status = Array.isArray(filters.status) ? filters.status.join(',') : filters.status;
+    }
     if (filters.dateFrom) params.after = filters.dateFrom;
     if (filters.dateTo) params.before = filters.dateTo;
     if (filters.search) params.search = filters.search;

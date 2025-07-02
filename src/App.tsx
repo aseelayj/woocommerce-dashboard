@@ -1,15 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Toaster } from 'sonner';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Header } from '@/components/dashboard/Header';
 import { HeaderWithAuth } from '@/components/dashboard/HeaderWithAuth';
 import { Dashboard } from '@/components/dashboard/Dashboard';
+import { MultiStoreDashboard } from '@/components/dashboard/MultiStoreDashboard';
 import { OrdersTable } from '@/components/orders/OrdersTable';
+import { MultiStoreOrders } from '@/components/orders/MultiStoreOrders';
 import { OrderDetailsDrawer } from '@/components/orders/OrderDetailsDrawer';
 import { ShopForm } from '@/components/shops/ShopForm';
+import { Settings } from '@/components/settings/Settings';
 import { WooCommerceAPI, shopAPI, isUsingRealAPI } from '@/lib/api-wrapper';
 import { Shop, Order, FilterOptions, PaginationOptions, OrderStatus } from '@/types';
-import { Menu, X } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type ActiveView = 'dashboard' | 'orders' | 'settings';
@@ -18,6 +21,7 @@ function App() {
   // State management
   const [shops, setShops] = useState<Shop[]>([]);
   const [activeShop, setActiveShop] = useState<Shop | null>(null);
+  const [viewAllStores, setViewAllStores] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -26,12 +30,17 @@ function App() {
   const [showShopForm, setShowShopForm] = useState(false);
   const [editingShop, setEditingShop] = useState<Shop | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [prevFilters, setPrevFilters] = useState<FilterOptions | null>(null);
 
   // Filters and pagination
-  const [filters, setFilters] = useState<FilterOptions>({});
+  const now = new Date();
+  const [filters, setFilters] = useState<FilterOptions>({
+    dateFrom: new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0], // Jan 1st of current year
+    dateTo: now.toISOString().split('T')[0] // Today
+  });
   const [pagination, setPagination] = useState<PaginationOptions>({
     page: 1,
-    limit: 10,
+    limit: 50,
     sortBy: 'date_created',
     sortOrder: 'desc',
   });
@@ -41,10 +50,29 @@ function App() {
     initializeData();
   }, []);
 
+  // Track if we should append or replace orders
+  const [shouldAppend, setShouldAppend] = useState(false);
+
   // Load orders when active shop or filters change
   useEffect(() => {
     if (activeShop && activeView === 'orders') {
-      loadOrders();
+      // Reset orders when filters change (compare actual values, not object reference)
+      const filtersChanged = prevFilters && (
+        filters.dateFrom !== prevFilters.dateFrom ||
+        filters.dateTo !== prevFilters.dateTo ||
+        filters.status !== prevFilters.status ||
+        filters.search !== prevFilters.search
+      );
+      
+      if (filtersChanged || !prevFilters) {
+        setOrders([]);
+        setShouldAppend(false);
+        setPrevFilters(filters);
+        if (filtersChanged) {
+          setPagination(prev => ({ ...prev, page: 1 }));
+        }
+      }
+      loadOrders(shouldAppend);
     }
   }, [activeShop, filters, pagination, activeView]);
 
@@ -63,19 +91,29 @@ function App() {
     }
   };
 
-  const loadOrders = async () => {
+  const loadOrders = async (append = false) => {
     if (!activeShop) return;
 
     setLoading(true);
     try {
       const api = new WooCommerceAPI(isUsingRealAPI() ? activeShop.id : activeShop);
       const response = await api.getOrders(filters, pagination);
-      setOrders(response.orders);
+      
+      if (append && pagination.page > 1) {
+        // Append new orders to existing ones
+        setOrders(prev => [...prev, ...response.orders]);
+      } else {
+        // Replace orders (for first page or filter changes)
+        setOrders(response.orders);
+      }
+      
       setTotalOrders(response.total);
     } catch (error) {
       console.error('Error loading orders:', error);
-      setOrders([]);
-      setTotalOrders(0);
+      if (!append) {
+        setOrders([]);
+        setTotalOrders(0);
+      }
     } finally {
       setLoading(false);
     }
@@ -83,9 +121,11 @@ function App() {
 
   const handleShopSelect = (shop: Shop) => {
     setActiveShop(shop);
+    setViewAllStores(false);
     setSelectedOrder(null);
     setSidebarOpen(false); // Close sidebar on mobile after selection
-    // Reset pagination when switching shops
+    // Reset orders and pagination when switching shops
+    setOrders([]);
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
@@ -94,7 +134,9 @@ function App() {
     setSelectedOrder(null);
     setSidebarOpen(false); // Close sidebar on mobile after selection
     if (view === 'orders') {
-      // Reset pagination when switching to orders view
+      // Reset orders and pagination when switching to orders view
+      setOrders([]);
+      setShouldAppend(false);
       setPagination(prev => ({ ...prev, page: 1 }));
     }
   };
@@ -156,12 +198,15 @@ function App() {
 
   const handleRefresh = () => {
     if (activeView === 'orders') {
-      loadOrders();
+      setOrders([]);
+      setShouldAppend(false);
+      setPagination(prev => ({ ...prev, page: 1 }));
+      loadOrders(false);
     }
   };
 
   const renderMainContent = () => {
-    if (!activeShop) {
+    if (!activeShop && !viewAllStores) {
       return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
           <div className="space-y-6 max-w-md">
@@ -187,31 +232,57 @@ function App() {
 
     switch (activeView) {
       case 'dashboard':
+        if (viewAllStores) {
+          return <MultiStoreDashboard shops={shops} />;
+        }
         return <Dashboard activeShop={activeShop} />;
       case 'orders':
+        if (viewAllStores) {
+          return (
+            <MultiStoreOrders 
+              shops={shops} 
+              onOrderSelect={(order) => {
+                // Set the selected order without the shop info for the drawer
+                const { shopName, shopId, ...orderWithoutShop } = order;
+                setSelectedOrder(orderWithoutShop);
+              }}
+            />
+          );
+        }
         return (
           <OrdersTable
             orders={orders}
             loading={loading}
             total={totalOrders}
             onOrderSelect={setSelectedOrder}
-            onFiltersChange={setFilters}
-            onPaginationChange={setPagination}
+            onFiltersChange={(newFilters) => {
+              setFilters(newFilters);
+              setOrders([]); // Clear orders when filters change
+              setShouldAppend(false);
+            }}
+            onPaginationChange={(newPagination) => {
+              // Check if we're loading more (next page) or changing pages
+              if (newPagination.page > pagination.page) {
+                setShouldAppend(true);
+              } else {
+                setShouldAppend(false);
+                setOrders([]);
+              }
+              setPagination(newPagination);
+            }}
             filters={filters}
             pagination={pagination}
           />
         );
       case 'settings':
         return (
-          <div className="space-y-6">
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">⚙️</span>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Settings</h3>
-              <p className="text-gray-600">Shop settings and configuration options coming soon</p>
-            </div>
-          </div>
+          <Settings
+            shops={shops}
+            activeShop={activeShop}
+            onAddShop={handleAddShop}
+            onEditShop={handleEditShop}
+            onShopUpdate={setShops}
+          />
         );
       default:
         return null;
@@ -237,10 +308,16 @@ function App() {
           shops={shops}
           activeShop={activeShop}
           activeView={activeView}
+          viewAllStores={viewAllStores}
           onShopSelect={handleShopSelect}
           onViewChange={handleViewChange}
           onAddShop={handleAddShop}
           onEditShop={handleEditShop}
+          onViewAllStores={() => {
+            setViewAllStores(true);
+            setActiveShop(null);
+            setSidebarOpen(false);
+          }}
           onClose={() => setSidebarOpen(false)}
         />
       </div>
@@ -259,9 +336,11 @@ function App() {
           </Button>
           <div className="text-center">
             <h1 className="font-bold text-lg text-gray-900">WooCommerce</h1>
-            {activeShop && (
+            {viewAllStores ? (
+              <p className="text-xs text-gray-500">All Stores</p>
+            ) : activeShop ? (
               <p className="text-xs text-gray-500 truncate max-w-[200px]">{activeShop.name}</p>
-            )}
+            ) : null}
           </div>
           <div className="w-9" /> {/* Spacer for centering */}
         </div>
@@ -270,14 +349,14 @@ function App() {
         <div className="hidden lg:block">
           {isUsingRealAPI() ? (
             <HeaderWithAuth
-              activeShop={activeShop}
+              activeShop={viewAllStores ? null : activeShop}
               activeView={activeView}
               onRefresh={handleRefresh}
               isLoading={loading}
             />
           ) : (
             <Header
-              activeShop={activeShop}
+              activeShop={viewAllStores ? null : activeShop}
               activeView={activeView}
               onRefresh={handleRefresh}
               isLoading={loading}
@@ -299,11 +378,12 @@ function App() {
         open={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
         onStatusUpdate={handleOrderStatusUpdate}
+        shop={activeShop || undefined}
       />
 
       {/* Shop Form Dialog */}
       <ShopForm
-        shop={editingShop}
+        shop={editingShop || undefined}
         open={showShopForm}
         onClose={() => {
           setShowShopForm(false);

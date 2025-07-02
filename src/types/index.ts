@@ -6,6 +6,18 @@ export interface Shop {
   consumerSecret: string;
   isActive: boolean;
   createdAt: string;
+  // Store info from WooCommerce (optional, fetched separately)
+  storeInfo?: {
+    store_name?: string;
+    store_address?: string;
+    store_city?: string;
+    store_country?: string;
+    store_postcode?: string;
+    store_email?: string;
+    currency?: string;
+    currency_symbol?: string;
+    timezone?: string;
+  };
 }
 
 export interface Customer {

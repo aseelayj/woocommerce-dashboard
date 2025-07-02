@@ -56,6 +56,10 @@ export class WooCommerceAPI {
   async getOrdersTotals(): Promise<any> {
     return (this.api as any).getOrdersTotals?.() || { total: 0 };
   }
+
+  async getStoreInfo(): Promise<any> {
+    return (this.api as any).getStoreInfo?.() || null;
+  }
 }
 
 // Export the appropriate shop API based on configuration

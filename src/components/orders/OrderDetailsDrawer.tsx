@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -7,7 +7,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -36,32 +35,44 @@ import {
   FileText,
   Printer
 } from 'lucide-react';
-import { Order, OrderStatus } from '@/types';
+import { Order, OrderStatus, Shop } from '@/types';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { downloadInvoice } from './InvoiceGenerator';
+import { downloadInvoicePDF, printInvoicePDF } from './InvoicePDF';
+import { useStoreInfo } from '@/hooks/useStoreInfo';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface OrderDetailsDrawerProps {
   order: Order | null;
   open: boolean;
   onClose: () => void;
   onStatusUpdate?: (orderId: number, status: OrderStatus) => void;
+  shop?: Shop;
 }
 
 export function OrderDetailsDrawer({ 
   order, 
   open, 
   onClose, 
-  onStatusUpdate 
+  onStatusUpdate,
+  shop 
 }: OrderDetailsDrawerProps) {
   const [isEditingStatus, setIsEditingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState<OrderStatus | ''>('');
+  const { storeInfo } = useStoreInfo(shop || null);
 
   if (!order) return null;
 
   const formatCurrency = (amount: string) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: order.currency || 'USD',
+      currency: storeInfo?.currency || order.currency || 'USD',
     }).format(parseFloat(amount));
   };
 
@@ -79,16 +90,52 @@ export function OrderDetailsDrawer({
     }
   };
 
-  const handleDownloadInvoice = () => {
-    toast.success(`Invoice for order #${order.number} downloaded`);
-    // In a real implementation, this would generate and download the actual invoice
-    console.log('Downloading invoice for order:', order.id);
+  const handleDownloadInvoice = (format: 'html' | 'pdf') => {
+    // Use store info from WooCommerce if available, otherwise fallback to shop data
+    const invoiceShopInfo = storeInfo ? {
+      shopName: storeInfo.store_name || shop?.name || '',
+      shopAddress: storeInfo.store_address ? 
+        `${storeInfo.store_address}${storeInfo.store_city ? ', ' + storeInfo.store_city : ''}${storeInfo.store_postcode ? ' ' + storeInfo.store_postcode : ''}${storeInfo.store_country ? ', ' + storeInfo.store_country : ''}` : 
+        shop?.baseUrl || '',
+      shopEmail: storeInfo.store_email || (shop ? `support@${new URL(shop.baseUrl).hostname}` : ''),
+      shopPhone: ''
+    } : shop ? {
+      shopName: shop.name,
+      shopAddress: shop.baseUrl,
+      shopEmail: `support@${new URL(shop.baseUrl).hostname}`,
+      shopPhone: ''
+    } : undefined;
+
+    if (format === 'pdf') {
+      // For PDF, pass the shop with storeInfo
+      const shopWithInfo = shop && storeInfo ? { ...shop, storeInfo } : shop;
+      const downloadPromise = downloadInvoicePDF(order, shopWithInfo);
+      toast.promise(downloadPromise, {
+        loading: 'Generating PDF invoice...',
+        success: `Invoice for order #${order.number} downloaded as PDF`,
+        error: 'Failed to download PDF invoice'
+      });
+    } else {
+      try {
+        downloadInvoice(order, invoiceShopInfo);
+        toast.success(`Invoice for order #${order.number} downloaded as HTML`);
+      } catch (error) {
+        console.error('Error downloading invoice:', error);
+        toast.error('Failed to download invoice');
+      }
+    }
   };
 
-  const handlePrintInvoice = () => {
-    toast.success(`Printing invoice for order #${order.number}`);
-    // In a real implementation, this would open the print dialog
-    console.log('Printing invoice for order:', order.id);
+  const handlePrintInvoice = async () => {
+    try {
+      // For print, pass the shop with storeInfo
+      const shopWithInfo = shop && storeInfo ? { ...shop, storeInfo } : shop;
+      await printInvoicePDF(order, shopWithInfo);
+      toast.success(`Opening print dialog for order #${order.number}`);
+    } catch (error) {
+      console.error('Error printing invoice:', error);
+      toast.error('Failed to print invoice');
+    }
   };
 
   const orderItems = order.line_items || [];
@@ -152,13 +199,24 @@ export function OrderDetailsDrawer({
 
           {/* Invoice Actions */}
           <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
-            <Button
-              onClick={handleDownloadInvoice}
-              className="gap-2 bg-blue-600 hover:bg-blue-700"
-            >
-              <Download className="h-4 w-4" />
-              Download Invoice
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
+                  <Download className="h-4 w-4" />
+                  Download Invoice
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => handleDownloadInvoice('pdf')}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Download as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownloadInvoice('html')}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Download as HTML
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="outline"
               onClick={handlePrintInvoice}
@@ -433,17 +491,28 @@ export function OrderDetailsDrawer({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <Button
-                      onClick={handleDownloadInvoice}
-                      className="gap-2 bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download Invoice
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button className="gap-2 bg-blue-600 hover:bg-blue-700 w-full">
+                          <Download className="h-4 w-4" />
+                          Download Invoice
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem onClick={() => handleDownloadInvoice('pdf')}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Download as PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadInvoice('html')}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Download as HTML
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button
                       variant="outline"
                       onClick={handlePrintInvoice}
-                      className="gap-2 border-gray-200 hover:bg-gray-50"
+                      className="gap-2 border-gray-200 hover:bg-gray-50 w-full"
                     >
                       <Printer className="h-4 w-4" />
                       Print Invoice

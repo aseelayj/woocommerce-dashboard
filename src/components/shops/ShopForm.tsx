@@ -27,12 +27,26 @@ interface ShopFormProps {
 
 export function ShopForm({ shop, open, onClose, onSave }: ShopFormProps) {
   const [formData, setFormData] = useState({
-    name: shop?.name || '',
-    baseUrl: shop?.baseUrl || '',
-    consumerKey: shop?.consumerKey || '',
-    consumerSecret: shop?.consumerSecret || '',
-    isActive: shop?.isActive ?? true,
+    name: '',
+    baseUrl: '',
+    consumerKey: '',
+    consumerSecret: '',
+    isActive: true,
   });
+
+  // Reset form when shop changes or dialog opens
+  React.useEffect(() => {
+    if (open) {
+      setFormData({
+        name: shop?.name || '',
+        baseUrl: shop?.baseUrl || '',
+        consumerKey: shop?.consumerKey || '',
+        consumerSecret: shop?.consumerSecret || '',
+        isActive: shop?.isActive ?? true,
+      });
+      setConnectionStatus('idle');
+    }
+  }, [shop, open]);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);

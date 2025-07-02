@@ -66,18 +66,24 @@ export class SupabaseWooCommerceAPI {
     // Transform WooCommerce orders to our Order type
     const transformedOrders: Order[] = response.orders.map((order: any) => ({
       id: order.id,
+      parent_id: order.parent_id || 0,
       number: order.number,
+      order_key: order.order_key || '',
+      created_via: order.created_via || '',
+      version: order.version || '',
       status: order.status,
       currency: order.currency,
-      total: order.total,
       date_created: order.date_created,
       date_modified: order.date_modified,
-      customer: {
-        id: order.customer_id,
-        first_name: order.billing.first_name || '',
-        last_name: order.billing.last_name || '',
-        email: order.billing.email || '',
-      },
+      discount_total: order.discount_total || '0',
+      discount_tax: order.discount_tax || '0',
+      shipping_total: order.shipping_total || '0',
+      shipping_tax: order.shipping_tax || '0',
+      cart_tax: order.cart_tax || '0',
+      total: order.total,
+      total_tax: order.total_tax || '0',
+      customer_id: order.customer_id || 0,
+      customer_note: order.customer_note || '',
       billing: {
         first_name: order.billing.first_name || '',
         last_name: order.billing.last_name || '',
@@ -104,11 +110,20 @@ export class SupabaseWooCommerceAPI {
       },
       payment_method: order.payment_method || '',
       payment_method_title: order.payment_method_title || '',
+      transaction_id: order.transaction_id || '',
       line_items: order.line_items || [],
+      tax_lines: order.tax_lines || [],
       shipping_lines: order.shipping_lines || [],
       fee_lines: order.fee_lines || [],
       coupon_lines: order.coupon_lines || [],
-      tax_lines: order.tax_lines || [],
+      refunds: order.refunds || [],
+      customer: {
+        id: order.customer_id,
+        username: '',
+        first_name: order.billing.first_name || '',
+        last_name: order.billing.last_name || '',
+        email: order.billing.email || '',
+      },
     }));
 
     // Sort client-side if needed for specific sort fields
@@ -156,30 +171,7 @@ export class SupabaseWooCommerceAPI {
     
     if (!order) return null;
 
-    return {
-      id: order.id,
-      number: order.number,
-      status: order.status,
-      currency: order.currency,
-      total: order.total,
-      date_created: order.date_created,
-      date_modified: order.date_modified,
-      customer: {
-        id: order.customer_id,
-        first_name: order.billing.first_name || '',
-        last_name: order.billing.last_name || '',
-        email: order.billing.email || '',
-      },
-      billing: order.billing,
-      shipping: order.shipping,
-      payment_method: order.payment_method || '',
-      payment_method_title: order.payment_method_title || '',
-      line_items: order.line_items || [],
-      shipping_lines: order.shipping_lines || [],
-      fee_lines: order.fee_lines || [],
-      coupon_lines: order.coupon_lines || [],
-      tax_lines: order.tax_lines || [],
-    };
+    return order;
   }
 
   async updateOrderStatus(orderId: number, status: Order['status']): Promise<Order | null> {
@@ -209,6 +201,44 @@ export class SupabaseWooCommerceAPI {
   async getOrdersTotals() {
     const api = await getWooCommerceAPI(this.storeId);
     return api.getTotalsReport('orders');
+  }
+
+  async getStoreInfo(): Promise<any> {
+    try {
+      const api = await getWooCommerceAPI(this.storeId);
+      
+      // Try to get system status which includes store info
+      const systemStatus = await api.getSystemStatus();
+      if (systemStatus?.environment) {
+        return {
+          store_name: systemStatus.environment.site_name || '',
+          store_address: systemStatus.environment.site_address || '',
+          store_city: systemStatus.environment.site_city || '',
+          store_country: systemStatus.environment.default_country || '',
+          store_postcode: systemStatus.environment.site_postcode || '',
+          store_email: systemStatus.environment.admin_email || '',
+          currency: systemStatus.settings?.currency || 'USD',
+          currency_symbol: systemStatus.settings?.currency_symbol || '$',
+          timezone: systemStatus.environment.default_timezone || ''
+        };
+      }
+    } catch (error) {
+      console.warn('Could not fetch store info from WooCommerce:', error);
+    }
+    
+    // Fallback to store data from database
+    const store = await storesService.getStore(this.storeId);
+    return {
+      store_name: store?.name || '',
+      store_address: '',
+      store_city: '',
+      store_country: '',
+      store_postcode: '',
+      store_email: store ? `support@${new URL(store.url).hostname}` : '',
+      currency: 'USD',
+      currency_symbol: '$',
+      timezone: ''
+    };
   }
 }
 

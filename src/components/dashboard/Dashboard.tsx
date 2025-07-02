@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +7,6 @@ import {
   ShoppingCart, 
   TrendingUp, 
   Clock,
-  Users,
   Package,
   AlertCircle,
   Calendar,
@@ -15,15 +14,15 @@ import {
   ArrowDownRight,
   RefreshCw
 } from 'lucide-react';
-import { Shop, Order } from '@/types';
+import { Shop } from '@/types';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { apiCache } from '@/lib/cache';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 
 interface DashboardProps {
-  activeShop: Shop;
+  activeShop: Shop | null;
 }
 
 interface DashboardStats {
@@ -55,9 +54,12 @@ export function Dashboard({ activeShop }: DashboardProps) {
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [fetchAllOrders, setFetchAllOrders] = useState(false);
   const [isFromCache, setIsFromCache] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 29),
-    to: new Date()
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const now = new Date();
+    return {
+      from: new Date(now.getFullYear(), 0, 1), // January 1st of current year
+      to: now
+    };
   });
 
   useEffect(() => {
@@ -89,7 +91,12 @@ export function Dashboard({ activeShop }: DashboardProps) {
         if (dateRange?.from) dateFilters.dateFrom = format(dateRange.from, 'yyyy-MM-dd');
         if (dateRange?.to) dateFilters.dateTo = format(dateRange.to, 'yyyy-MM-dd');
         
-        const ordersResp = await api.getOrders(dateFilters, { page: 1, limit: 5 });
+        const ordersResp = await api.getOrders(dateFilters, { 
+          page: 1, 
+          limit: 5,
+          sortBy: 'date_created',
+          sortOrder: 'desc'
+        });
         setRecentOrders(
           ordersResp.orders.map(order => ({
             id: order.id,
@@ -245,10 +252,10 @@ export function Dashboard({ activeShop }: DashboardProps) {
       } else {
         try {
           const [completedResp, pendingResp, processingResp, failedResp] = await Promise.all([
-            api.getOrders({ ...dateFilters, status: 'completed' }, { page: 1, limit: 1 }),
-            api.getOrders({ ...dateFilters, status: 'pending' }, { page: 1, limit: 1 }),
-            api.getOrders({ ...dateFilters, status: 'processing' }, { page: 1, limit: 1 }),
-            api.getOrders({ ...dateFilters, status: 'failed' }, { page: 1, limit: 1 })
+            api.getOrders({ ...dateFilters, status: 'completed' }, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' }),
+            api.getOrders({ ...dateFilters, status: 'pending' }, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' }),
+            api.getOrders({ ...dateFilters, status: 'processing' }, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' }),
+            api.getOrders({ ...dateFilters, status: 'failed' }, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' })
           ]);
           
           completedOrders = completedResp.total;
@@ -382,7 +389,7 @@ export function Dashboard({ activeShop }: DashboardProps) {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl md:text-2xl font-bold text-gray-900">Dashboard Overview</h2>
-            <p className="text-sm md:text-base text-gray-600">Welcome back! Here's what's happening with {activeShop.name}.</p>
+            <p className="text-sm md:text-base text-gray-600">Welcome back! Here's what's happening with {activeShop?.name || 'your store'}.</p>
           </div>
           <div className="flex items-center gap-2">
             {isFromCache && !loading && (

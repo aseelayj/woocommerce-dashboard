@@ -5,34 +5,10 @@ import { demoOrders, demoShops } from '@/data/demo';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export class WooCommerceAPI {
-  private baseUrl: string;
-  private consumerKey: string;
-  private consumerSecret: string;
+  private shop: Shop;
 
   constructor(shop: Shop) {
-    this.baseUrl = shop.baseUrl;
-    this.consumerKey = shop.consumerKey;
-    this.consumerSecret = shop.consumerSecret;
-  }
-
-  private async makeRequest(endpoint: string, options: RequestInit = {}) {
-    // In a real implementation, this would make actual HTTP requests to WooCommerce REST API
-    // For demo purposes, we'll simulate API responses with realistic data
-    await delay(Math.random() * 500 + 200); // Random delay between 200-700ms
-    
-    if (endpoint.includes('/orders')) {
-      return this.getMockOrdersResponse();
-    }
-    
-    throw new Error(`Endpoint ${endpoint} not implemented`);
-  }
-
-  private getMockOrdersResponse(): OrdersResponse {
-    return {
-      orders: demoOrders,
-      total: demoOrders.length,
-      totalPages: Math.ceil(demoOrders.length / 10),
-    };
+    this.shop = shop;
   }
 
   async getOrders(
@@ -59,20 +35,18 @@ export class WooCommerceAPI {
         order.customer.first_name.toLowerCase().includes(searchTerm) ||
         order.customer.last_name.toLowerCase().includes(searchTerm) ||
         order.customer.email.toLowerCase().includes(searchTerm) ||
-        order.billing.company.toLowerCase().includes(searchTerm) ||
-        order.payment_method_title.toLowerCase().includes(searchTerm)
+        order.billing.email.toLowerCase().includes(searchTerm)
       );
     }
 
     // Apply date filters
     if (filters.dateFrom) {
-      filteredOrders = filteredOrders.filter(order =>
+      filteredOrders = filteredOrders.filter(order => 
         new Date(order.date_created) >= new Date(filters.dateFrom!)
       );
     }
-
     if (filters.dateTo) {
-      filteredOrders = filteredOrders.filter(order =>
+      filteredOrders = filteredOrders.filter(order => 
         new Date(order.date_created) <= new Date(filters.dateTo!)
       );
     }
@@ -84,8 +58,12 @@ export class WooCommerceAPI {
 
       switch (pagination.sortBy) {
         case 'date_created':
-          aValue = new Date(a.date_created);
-          bValue = new Date(b.date_created);
+          aValue = new Date(a.date_created).getTime();
+          bValue = new Date(b.date_created).getTime();
+          break;
+        case 'number':
+          aValue = parseInt(a.number.replace('#', ''));
+          bValue = parseInt(b.number.replace('#', ''));
           break;
         case 'total':
           aValue = parseFloat(a.total);
@@ -95,32 +73,23 @@ export class WooCommerceAPI {
           aValue = a.status;
           bValue = b.status;
           break;
-        case 'customer':
-          aValue = `${a.customer.first_name} ${a.customer.last_name}`;
-          bValue = `${b.customer.first_name} ${b.customer.last_name}`;
-          break;
-        case 'id':
-          aValue = a.id;
-          bValue = b.id;
-          break;
         default:
           aValue = a.id;
           bValue = b.id;
       }
 
-      if (pagination.sortOrder === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      if (pagination.sortOrder === 'desc') {
+        return bValue - aValue;
       }
+      return aValue - bValue;
     });
 
     // Apply pagination
-    const startIndex = (pagination.page - 1) * pagination.limit;
-    const endIndex = startIndex + pagination.limit;
-    const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+    const start = (pagination.page - 1) * pagination.limit;
+    const end = start + pagination.limit;
+    const paginatedOrders = filteredOrders.slice(start, end);
 
-    await delay(100); // Final processing delay
+    await delay(Math.random() * 500 + 200);
 
     return {
       orders: paginatedOrders,
@@ -130,72 +99,136 @@ export class WooCommerceAPI {
   }
 
   async getOrder(orderId: number): Promise<Order | null> {
-    await delay(200);
+    await delay(300);
     return demoOrders.find(order => order.id === orderId) || null;
   }
 
   async updateOrderStatus(orderId: number, status: Order['status']): Promise<Order | null> {
     await delay(500);
-    const orderIndex = demoOrders.findIndex(order => order.id === orderId);
-    if (orderIndex !== -1) {
-      demoOrders[orderIndex] = {
-        ...demoOrders[orderIndex],
-        status,
-        date_modified: new Date().toISOString()
-      };
-      return demoOrders[orderIndex];
-    }
-    return null;
+    
+    const order = demoOrders.find(o => o.id === orderId);
+    if (!order) return null;
+    
+    // In a real implementation, this would update the order via API
+    // For demo, we'll just return the order with updated status
+    return {
+      ...order,
+      status,
+      date_modified: new Date().toISOString(),
+    };
+  }
+
+  async getSystemStatus() {
+    await delay(300);
+    return {
+      environment: {
+        active_plugins: [],
+        theme: 'storefront',
+      },
+      database: {
+        wc_database_version: '5.5.0',
+      },
+    };
   }
 
   async testConnection(): Promise<boolean> {
-    await delay(1000);
-    // Simulate connection test - in real implementation, this would test the actual API
-    return this.consumerKey.startsWith('ck_') && this.consumerSecret.startsWith('cs_');
+    await delay(500);
+    // For demo mode, always return true
+    return true;
+  }
+
+  async getStoreInfo() {
+    await delay(300);
+    // Return mock store info for demo mode
+    return {
+      store_name: this.shop.name,
+      store_address: '',
+      store_city: '',
+      store_country: 'US',
+      store_postcode: '',
+      store_email: `support@${new URL(this.shop.baseUrl).hostname}`,
+      currency: 'USD',
+      currency_symbol: '$',
+      timezone: 'America/New_York'
+    };
+  }
+
+  async getSalesReport(_params?: { 
+    period?: 'week' | 'month' | 'last_month' | 'year'; 
+    date_min?: string; 
+    date_max?: string 
+  }) {
+    await delay(500);
+    
+    // For demo purposes, return mock sales data
+    return {
+      total_sales: '125430.00',
+      total_orders: '342',
+      total_items: '1205',
+      total_tax: '12543.00',
+      total_shipping: '2340.00',
+      total_refunds: '0',
+      total_discount: '3450.00',
+      totals_grouped_by: 'day',
+      totals: {},
+    };
+  }
+
+  async getOrdersTotals() {
+    await delay(300);
+    
+    // Count orders by status from demo data
+    const totals = demoOrders.reduce((acc, order) => {
+      acc[order.status] = (acc[order.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return Object.entries(totals).map(([slug, total]) => ({
+      slug,
+      total,
+    }));
   }
 }
 
-// Enhanced Shop management API
+// Shop management functions
 export const shopAPI = {
   async getShops(): Promise<Shop[]> {
-    await delay(200);
-    return [...demoShops];
+    await delay(500);
+    return demoShops;
   },
 
-  async createShop(shop: Omit<Shop, 'id' | 'createdAt'>): Promise<Shop> {
+  async getShop(id: string): Promise<Shop | null> {
     await delay(300);
+    return demoShops.find(shop => shop.id === id) || null;
+  },
+
+  async createShop(shopData: Omit<Shop, 'id' | 'createdAt'>): Promise<Shop> {
+    await delay(700);
     const newShop: Shop = {
-      ...shop,
-      id: `shop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      ...shopData,
+      id: Date.now().toString(),
       createdAt: new Date().toISOString(),
     };
     demoShops.push(newShop);
     return newShop;
   },
 
-  async updateShop(shopId: string, updates: Partial<Shop>): Promise<Shop | null> {
-    await delay(300);
-    const shopIndex = demoShops.findIndex(shop => shop.id === shopId);
-    if (shopIndex !== -1) {
-      demoShops[shopIndex] = { 
-        ...demoShops[shopIndex], 
-        ...updates,
-        // Preserve original creation date
-        createdAt: demoShops[shopIndex].createdAt
-      };
-      return demoShops[shopIndex];
-    }
-    return null;
+  async updateShop(id: string, shopData: Partial<Shop>): Promise<Shop | null> {
+    await delay(500);
+    const shopIndex = demoShops.findIndex(shop => shop.id === id);
+    if (shopIndex === -1) return null;
+    
+    demoShops[shopIndex] = { ...demoShops[shopIndex], ...shopData };
+    return demoShops[shopIndex];
   },
 
-  async deleteShop(shopId: string): Promise<boolean> {
-    await delay(200);
-    const shopIndex = demoShops.findIndex(shop => shop.id === shopId);
-    if (shopIndex !== -1) {
-      demoShops.splice(shopIndex, 1);
-      return true;
-    }
-    return false;
+  async deleteShop(id: string): Promise<boolean> {
+    await delay(500);
+    const shopIndex = demoShops.findIndex(shop => shop.id === id);
+    if (shopIndex === -1) return false;
+    
+    demoShops.splice(shopIndex, 1);
+    return true;
   },
 
   async testConnection(shop: Omit<Shop, 'id' | 'createdAt'>): Promise<boolean> {
@@ -206,6 +239,6 @@ export const shopAPI = {
     const hasValidKey = shop.consumerKey && shop.consumerKey.startsWith('ck_') && shop.consumerKey.length > 10;
     const hasValidSecret = shop.consumerSecret && shop.consumerSecret.startsWith('cs_') && shop.consumerSecret.length > 10;
     
-    return hasValidUrl && hasValidKey && hasValidSecret;
+    return !!(hasValidUrl && hasValidKey && hasValidSecret);
   },
 };

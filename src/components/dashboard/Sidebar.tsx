@@ -1,4 +1,3 @@
-import React from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,10 +20,12 @@ interface SidebarProps {
   shops: Shop[];
   activeShop: Shop | null;
   activeView: ActiveView;
+  viewAllStores: boolean;
   onShopSelect: (shop: Shop) => void;
   onViewChange: (view: ActiveView) => void;
   onAddShop: () => void;
   onEditShop: (shop: Shop) => void;
+  onViewAllStores: () => void;
   onClose?: () => void;
   className?: string;
 }
@@ -33,10 +34,12 @@ export function Sidebar({
   shops, 
   activeShop, 
   activeView,
+  viewAllStores,
   onShopSelect, 
   onViewChange,
   onAddShop, 
   onEditShop,
+  onViewAllStores,
   onClose,
   className 
 }: SidebarProps) {
@@ -85,8 +88,22 @@ export function Sidebar({
           )}
         </div>
         
-        {/* Active Shop */}
-        {activeShop && (
+        {/* Active Shop or All Stores */}
+        {viewAllStores ? (
+          <div className="p-3 md:p-4 bg-purple-50 rounded-xl border border-purple-100">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Store className="w-4 h-4 text-purple-700" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm text-gray-900">All Stores</p>
+                <p className="text-xs text-gray-600">
+                  Viewing {shops.filter(s => s.isActive).length} active stores
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : activeShop ? (
           <div className="p-3 md:p-4 bg-blue-50 rounded-xl border border-blue-100">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -118,7 +135,7 @@ export function Sidebar({
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Navigation */}
@@ -165,13 +182,41 @@ export function Sidebar({
           
           <ScrollArea className="max-h-48 md:max-h-64">
             <div className="space-y-2">
+              {/* All Stores Option */}
+              {shops.filter(s => s.isActive).length > 1 && (
+                <>
+                  <Button
+                    variant={viewAllStores ? 'secondary' : 'ghost'}
+                    className={cn(
+                      'w-full justify-start text-left h-auto p-2 md:p-3 transition-all',
+                      viewAllStores 
+                        ? 'bg-purple-50 border border-purple-200 hover:bg-purple-50' 
+                        : 'hover:bg-gray-50 border border-transparent'
+                    )}
+                    onClick={onViewAllStores}
+                  >
+                    <div className="flex items-center gap-2 md:gap-3 w-full">
+                      <Store className="w-3 h-3 md:w-4 md:h-4 text-purple-600" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs md:text-sm font-medium text-gray-900">All Stores</p>
+                        <p className="text-xs text-gray-500">
+                          View aggregated data
+                        </p>
+                      </div>
+                    </div>
+                  </Button>
+                  <Separator className="bg-gray-200" />
+                </>
+              )}
+              
+              {/* Individual Stores */}
               {shops.map((shop) => (
                 <Button
                   key={shop.id}
-                  variant={activeShop?.id === shop.id ? 'secondary' : 'ghost'}
+                  variant={!viewAllStores && activeShop?.id === shop.id ? 'secondary' : 'ghost'}
                   className={cn(
                     'w-full justify-start text-left h-auto p-2 md:p-3 transition-all',
-                    activeShop?.id === shop.id 
+                    !viewAllStores && activeShop?.id === shop.id 
                       ? 'bg-blue-50 border border-blue-200 hover:bg-blue-50' 
                       : 'hover:bg-gray-50 border border-transparent'
                   )}

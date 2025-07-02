@@ -1,4 +1,3 @@
-import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { OrderStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -49,7 +48,7 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
       default:
         return {
           className: 'bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-100',
-          label: status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')
+          label: (status as string).charAt(0).toUpperCase() + (status as string).slice(1).replace('-', ' ')
         };
     }
   };

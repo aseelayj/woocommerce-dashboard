@@ -15,7 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle, XCircle, AlertCircle, ExternalLink } from 'lucide-react';
 import { Shop } from '@/types';
-import { shopAPI } from '@/lib/api';
+import { shopAPI } from '@/lib/api-wrapper';
 import { toast } from 'sonner';
 
 interface ShopFormProps {

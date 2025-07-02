@@ -16,7 +16,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Shop, Order } from '@/types';
-import { WooCommerceAPI } from '@/lib/api';
+import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 
 interface DashboardProps {
@@ -33,6 +33,7 @@ interface DashboardStats {
   averageOrderValue: number;
   revenueGrowth: number;
   ordersGrowth: number;
+  isPartialData?: boolean;
 }
 
 interface RecentOrder {
@@ -48,19 +49,50 @@ export function Dashboard({ activeShop }: DashboardProps) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
+  const [fetchAllOrders, setFetchAllOrders] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
   }, [activeShop]);
 
-  const loadDashboardData = async () => {
+  const handleFetchAllOrders = () => {
+    setFetchAllOrders(true);
+    loadDashboardData(true);
+  };
+
+  const loadDashboardData = async (forceLoadAll = false) => {
     if (!activeShop) return;
 
     setLoading(true);
     try {
-      const api = new WooCommerceAPI(activeShop);
+      const api = new WooCommerceAPI(isUsingRealAPI() ? activeShop.id : activeShop);
       
-      // Get orders for current period (last 30 days)
+      // Get sales report for totals (last 30 days)
+      let totalRevenue = 0;
+      let totalOrdersCount = 0;
+      
+      try {
+        // Try to get sales report for accurate totals
+        const currentDate = new Date();
+        const thirtyDaysAgo = format(subDays(currentDate, 30), 'yyyy-MM-dd');
+        const today = format(currentDate, 'yyyy-MM-dd');
+        
+        const salesReport = await api.getSalesReport({
+          date_min: thirtyDaysAgo,
+          date_max: today
+        });
+        console.log('Sales report:', salesReport);
+        
+        if (salesReport && salesReport.total_sales) {
+          totalRevenue = parseFloat(salesReport.total_sales);
+          totalOrdersCount = parseInt(salesReport.total_orders) || 0;
+        }
+      } catch (error) {
+        console.log('Sales report not available, will calculate from orders');
+      }
+      
+      // Get orders for display and additional stats
       const currentPeriodResponse = await api.getOrders({}, { 
         page: 1, 
         limit: 100, 
@@ -69,27 +101,78 @@ export function Dashboard({ activeShop }: DashboardProps) {
       });
       
       // Get orders for previous period (30-60 days ago) for comparison
-      const previousPeriodResponse = await api.getOrders({
-        dateFrom: format(subDays(new Date(), 60), 'yyyy-MM-dd'),
-        dateTo: format(subDays(new Date(), 30), 'yyyy-MM-dd')
-      }, { 
-        page: 1, 
-        limit: 100, 
-        sortBy: 'date_created', 
-        sortOrder: 'desc' 
-      });
+      let previousOrders: any[] = [];
+      try {
+        const sixtyDaysAgo = format(subDays(new Date(), 60), 'yyyy-MM-dd');
+        const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
+        
+        const previousPeriodResponse = await api.getOrders({
+          dateFrom: sixtyDaysAgo,
+          dateTo: thirtyDaysAgo
+        }, { 
+          page: 1, 
+          limit: 100, 
+          sortBy: 'date_created', 
+          sortOrder: 'desc' 
+        });
+        previousOrders = previousPeriodResponse.orders;
+      } catch (error) {
+        console.warn('Failed to fetch previous period data, continuing without comparison:', error);
+        // Continue without comparison data
+      }
 
       const currentOrders = currentPeriodResponse.orders;
-      const previousOrders = previousPeriodResponse.orders;
 
-      // Calculate current period stats
-      const totalRevenue = currentOrders.reduce((sum, order) => sum + parseFloat(order.total), 0);
-      const totalOrders = currentOrders.length;
+      // If we couldn't get totals from sales report, calculate from what we have
+      if (totalRevenue === 0 && totalOrdersCount === 0) {
+        // Use the total count from the response headers
+        totalOrdersCount = currentPeriodResponse.total;
+        totalRevenue = currentOrders.reduce((sum, order) => sum + parseFloat(order.total), 0);
+        
+        // Check if user wants to fetch all orders
+        if ((fetchAllOrders || forceLoadAll) && currentPeriodResponse.total > 100) {
+          console.log(`Fetching all ${currentPeriodResponse.total} orders...`);
+          
+          // Calculate how many pages we need to fetch
+          const totalPages = currentPeriodResponse.totalPages;
+          
+          // Fetch remaining pages (starting from page 2)
+          for (let page = 2; page <= totalPages; page++) {
+            try {
+              setLoadingMessage(`Fetching orders: page ${page} of ${totalPages}...`);
+              console.log(`Fetching page ${page} of ${totalPages}...`);
+              const pageResponse = await api.getOrders({}, { 
+                page, 
+                limit: 100, 
+                sortBy: 'date_created', 
+                sortOrder: 'desc' 
+              });
+              
+              // Add revenue from this page
+              const pageRevenue = pageResponse.orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
+              totalRevenue += pageRevenue;
+              
+              // Optional: Add a small delay to avoid rate limiting
+              if (page < totalPages) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+            } catch (error) {
+              console.error(`Failed to fetch page ${page}:`, error);
+              // Continue with partial data if a page fails
+              break;
+            }
+          }
+          
+          console.log(`Total revenue from all orders: ${formatCurrency(totalRevenue)}`);
+        }
+      }
+
+      // Calculate stats from fetched orders for status breakdown
       const completedOrders = currentOrders.filter(order => order.status === 'completed').length;
       const pendingOrders = currentOrders.filter(order => order.status === 'pending').length;
       const processingOrders = currentOrders.filter(order => order.status === 'processing').length;
       const failedOrders = currentOrders.filter(order => order.status === 'failed').length;
-      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      const averageOrderValue = totalOrdersCount > 0 ? totalRevenue / totalOrdersCount : 0;
 
       // Calculate previous period stats for growth comparison
       const previousRevenue = previousOrders.reduce((sum, order) => sum + parseFloat(order.total), 0);
@@ -97,18 +180,19 @@ export function Dashboard({ activeShop }: DashboardProps) {
 
       // Calculate growth percentages
       const revenueGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0;
-      const ordersGrowth = previousOrderCount > 0 ? ((totalOrders - previousOrderCount) / previousOrderCount) * 100 : 0;
+      const ordersGrowth = previousOrderCount > 0 ? ((totalOrdersCount - previousOrderCount) / previousOrderCount) * 100 : 0;
 
       setStats({
         totalRevenue,
-        totalOrders,
+        totalOrders: totalOrdersCount,
         completedOrders,
         pendingOrders,
         processingOrders,
         failedOrders,
         averageOrderValue,
         revenueGrowth,
-        ordersGrowth
+        ordersGrowth,
+        isPartialData: currentPeriodResponse.total > 100 && !fetchAllOrders
       });
 
       // Set recent orders (last 5)
@@ -127,6 +211,7 @@ export function Dashboard({ activeShop }: DashboardProps) {
       console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -162,7 +247,7 @@ export function Dashboard({ activeShop }: DashboardProps) {
           </div>
           <Button variant="outline" disabled className="gap-2 w-full md:w-auto">
             <RefreshCw className="h-4 w-4 animate-spin" />
-            Loading...
+            {loadingMessage || 'Loading...'}
           </Button>
         </div>
         
@@ -215,6 +300,22 @@ export function Dashboard({ activeShop }: DashboardProps) {
           <CardContent>
             <div className="text-xl md:text-2xl font-bold text-gray-900">
               {formatCurrency(stats?.totalRevenue || 0)}
+              {stats?.isPartialData && (
+                <div className="mt-1">
+                  <span className="text-xs text-amber-600 font-normal block">
+                    (from first 100 of {stats.totalOrders} orders)
+                  </span>
+                  <Button 
+                    size="sm" 
+                    variant="link" 
+                    className="text-xs p-0 h-auto text-blue-600 hover:text-blue-700"
+                    onClick={handleFetchAllOrders}
+                    disabled={loading}
+                  >
+                    Load all orders
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1 mt-1">
               {stats && stats.revenueGrowth >= 0 ? (

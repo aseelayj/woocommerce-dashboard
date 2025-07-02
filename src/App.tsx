@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Toaster } from 'sonner';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Header } from '@/components/dashboard/Header';
+import { HeaderWithAuth } from '@/components/dashboard/HeaderWithAuth';
 import { Dashboard } from '@/components/dashboard/Dashboard';
 import { OrdersTable } from '@/components/orders/OrdersTable';
 import { OrderDetailsDrawer } from '@/components/orders/OrderDetailsDrawer';
 import { ShopForm } from '@/components/shops/ShopForm';
-import { WooCommerceAPI, shopAPI } from '@/lib/api';
+import { WooCommerceAPI, shopAPI, isUsingRealAPI } from '@/lib/api-wrapper';
 import { Shop, Order, FilterOptions, PaginationOptions, OrderStatus } from '@/types';
 import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -67,7 +68,7 @@ function App() {
 
     setLoading(true);
     try {
-      const api = new WooCommerceAPI(activeShop);
+      const api = new WooCommerceAPI(isUsingRealAPI() ? activeShop.id : activeShop);
       const response = await api.getOrders(filters, pagination);
       setOrders(response.orders);
       setTotalOrders(response.total);
@@ -134,7 +135,7 @@ function App() {
     if (!activeShop) return;
 
     try {
-      const api = new WooCommerceAPI(activeShop);
+      const api = new WooCommerceAPI(isUsingRealAPI() ? activeShop.id : activeShop);
       const updatedOrder = await api.updateOrderStatus(orderId, status);
       
       if (updatedOrder) {
@@ -267,12 +268,21 @@ function App() {
 
         {/* Header - Hidden on mobile, shown on desktop */}
         <div className="hidden lg:block">
-          <Header
-            activeShop={activeShop}
-            activeView={activeView}
-            onRefresh={handleRefresh}
-            isLoading={loading}
-          />
+          {isUsingRealAPI() ? (
+            <HeaderWithAuth
+              activeShop={activeShop}
+              activeView={activeView}
+              onRefresh={handleRefresh}
+              isLoading={loading}
+            />
+          ) : (
+            <Header
+              activeShop={activeShop}
+              activeView={activeView}
+              onRefresh={handleRefresh}
+              isLoading={loading}
+            />
+          )}
         </div>
 
         {/* Content */}

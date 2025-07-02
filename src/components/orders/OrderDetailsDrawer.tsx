@@ -1,0 +1,496 @@
+import React, { useState } from 'react';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { OrderStatusBadge } from './OrderStatusBadge';
+import { 
+  Package, 
+  User, 
+  MapPin, 
+  CreditCard, 
+  Calendar,
+  Mail,
+  Phone,
+  Copy,
+  Edit,
+  Save,
+  X,
+  Building,
+  Download,
+  FileText,
+  Printer
+} from 'lucide-react';
+import { Order, OrderStatus } from '@/types';
+import { format } from 'date-fns';
+import { toast } from 'sonner';
+
+interface OrderDetailsDrawerProps {
+  order: Order | null;
+  open: boolean;
+  onClose: () => void;
+  onStatusUpdate?: (orderId: number, status: OrderStatus) => void;
+}
+
+export function OrderDetailsDrawer({ 
+  order, 
+  open, 
+  onClose, 
+  onStatusUpdate 
+}: OrderDetailsDrawerProps) {
+  const [isEditingStatus, setIsEditingStatus] = useState(false);
+  const [newStatus, setNewStatus] = useState<OrderStatus | ''>('');
+
+  if (!order) return null;
+
+  const formatCurrency = (amount: string) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: order.currency || 'USD',
+    }).format(parseFloat(amount));
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
+  };
+
+  const handleStatusUpdate = () => {
+    if (newStatus && onStatusUpdate) {
+      onStatusUpdate(order.id, newStatus);
+      setIsEditingStatus(false);
+      setNewStatus('');
+      toast.success('Order status updated successfully');
+    }
+  };
+
+  const handleDownloadInvoice = () => {
+    toast.success(`Invoice for order #${order.number} downloaded`);
+    // In a real implementation, this would generate and download the actual invoice
+    console.log('Downloading invoice for order:', order.id);
+  };
+
+  const handlePrintInvoice = () => {
+    toast.success(`Printing invoice for order #${order.number}`);
+    // In a real implementation, this would open the print dialog
+    console.log('Printing invoice for order:', order.id);
+  };
+
+  const orderItems = order.line_items || [];
+  const subtotal = orderItems.reduce((sum, item) => sum + parseFloat(item.total), 0);
+
+  return (
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-white">
+        <SheetHeader className="space-y-4 pb-6 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <SheetTitle className="text-2xl font-bold text-gray-900">Order #{order.number}</SheetTitle>
+              <SheetDescription className="text-gray-600">
+                Created on {format(new Date(order.date_created), 'MMMM dd, yyyy at HH:mm')}
+              </SheetDescription>
+            </div>
+            <div className="flex items-center gap-3">
+              {isEditingStatus ? (
+                <div className="flex items-center gap-2">
+                  <Select value={newStatus} onValueChange={(value) => setNewStatus(value as OrderStatus)}>
+                    <SelectTrigger className="w-40 border-gray-200">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="on-hold">On Hold</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      <SelectItem value="refunded">Refunded</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" onClick={handleStatusUpdate} disabled={!newStatus} className="bg-blue-600 hover:bg-blue-700">
+                    <Save className="h-3 w-3" />
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setIsEditingStatus(false)} className="border-gray-200">
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <OrderStatusBadge status={order.status} />
+                  {onStatusUpdate && (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditingStatus(true);
+                        setNewStatus(order.status);
+                      }}
+                      className="border-gray-200 hover:bg-gray-50"
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Invoice Actions */}
+          <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+            <Button
+              onClick={handleDownloadInvoice}
+              className="gap-2 bg-blue-600 hover:bg-blue-700"
+            >
+              <Download className="h-4 w-4" />
+              Download Invoice
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handlePrintInvoice}
+              className="gap-2 border-gray-200 hover:bg-gray-50"
+            >
+              <Printer className="h-4 w-4" />
+              Print Invoice
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => copyToClipboard(`Order #${order.number} - ${formatCurrency(order.total)}`)}
+              className="gap-2 border-gray-200 hover:bg-gray-50"
+            >
+              <Copy className="h-4 w-4" />
+              Copy Details
+            </Button>
+          </div>
+        </SheetHeader>
+
+        <div className="mt-6 space-y-6">
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 bg-gray-100">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-white">Overview</TabsTrigger>
+              <TabsTrigger value="customer" className="data-[state=active]:bg-white">Customer</TabsTrigger>
+              <TabsTrigger value="payment" className="data-[state=active]:bg-white">Payment</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-6 mt-6">
+              {/* Order Items */}
+              <Card className="border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900">
+                    <Package className="h-5 w-5 text-blue-600" />
+                    Order Items
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {orderItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-4 p-4 border border-gray-100 rounded-lg bg-gray-50">
+                      {item.image && (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                        />
+                      )}
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          Quantity: {item.quantity} × {formatCurrency(item.price)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-900">{formatCurrency(item.total)}</p>
+                      </div>
+                    </div>
+                  ))}
+
+                  <Separator className="bg-gray-200" />
+
+                  {/* Order Totals */}
+                  <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Subtotal:</span>
+                      <span className="font-medium text-gray-900">{formatCurrency(subtotal.toString())}</span>
+                    </div>
+                    {parseFloat(order.shipping_total) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Shipping:</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(order.shipping_total)}</span>
+                      </div>
+                    )}
+                    {parseFloat(order.total_tax) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Tax:</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(order.total_tax)}</span>
+                      </div>
+                    )}
+                    {parseFloat(order.discount_total) > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Discount:</span>
+                        <span className="font-medium">-{formatCurrency(order.discount_total)}</span>
+                      </div>
+                    )}
+                    <Separator className="bg-gray-200" />
+                    <div className="flex justify-between font-bold text-lg">
+                      <span className="text-gray-900">Total:</span>
+                      <span className="text-gray-900">{formatCurrency(order.total)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Customer Note */}
+              {order.customer_note && (
+                <Card className="border-gray-200 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-semibold text-gray-900">Customer Note</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded-lg border border-blue-100">{order.customer_note}</p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="customer" className="space-y-6 mt-6">
+              {/* Customer Info */}
+              <Card className="border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900">
+                    <User className="h-5 w-5 text-blue-600" />
+                    Customer Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Name</label>
+                      <p className="text-sm font-medium text-gray-900">{order.customer.first_name} {order.customer.last_name}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Username</label>
+                      <p className="text-sm font-medium text-gray-900">{order.customer.username}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Email</label>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900">{order.customer.email}</p>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(order.customer.email)}
+                        className="h-6 w-6 p-0 hover:bg-gray-100"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Billing Address */}
+              <Card className="border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900">
+                    <MapPin className="h-5 w-5 text-blue-600" />
+                    Billing Address
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {order.billing.first_name} {order.billing.last_name}
+                  </p>
+                  {order.billing.company && (
+                    <div className="flex items-center gap-2">
+                      <Building className="h-4 w-4 text-gray-400" />
+                      <p className="text-sm text-gray-700">{order.billing.company}</p>
+                    </div>
+                  )}
+                  <div className="text-sm text-gray-700 space-y-1">
+                    <p>{order.billing.address_1}</p>
+                    {order.billing.address_2 && <p>{order.billing.address_2}</p>}
+                    <p>{order.billing.city}, {order.billing.state} {order.billing.postcode}</p>
+                    <p className="font-medium">{order.billing.country}</p>
+                  </div>
+                  
+                  <div className="pt-3 space-y-2 border-t border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm text-gray-700">{order.billing.email}</span>
+                    </div>
+                    {order.billing.phone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm text-gray-700">{order.billing.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Shipping Address */}
+              <Card className="border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900">
+                    <Package className="h-5 w-5 text-blue-600" />
+                    Shipping Address
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {order.shipping.first_name} {order.shipping.last_name}
+                  </p>
+                  {order.shipping.company && (
+                    <div className="flex items-center gap-2">
+                      <Building className="h-4 w-4 text-gray-400" />
+                      <p className="text-sm text-gray-700">{order.shipping.company}</p>
+                    </div>
+                  )}
+                  <div className="text-sm text-gray-700 space-y-1">
+                    <p>{order.shipping.address_1}</p>
+                    {order.shipping.address_2 && <p>{order.shipping.address_2}</p>}
+                    <p>{order.shipping.city}, {order.shipping.state} {order.shipping.postcode}</p>
+                    <p className="font-medium">{order.shipping.country}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="payment" className="space-y-6 mt-6">
+              {/* Payment Information */}
+              <Card className="border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900">
+                    <CreditCard className="h-5 w-5 text-blue-600" />
+                    Payment Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Method</label>
+                      <p className="text-sm font-medium text-gray-900">{order.payment_method_title}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Status</label>
+                      <div className="mt-1">
+                        <OrderStatusBadge status={order.status} />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {order.transaction_id && (
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Transaction ID</label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm font-mono bg-gray-100 px-2 py-1 rounded border">{order.transaction_id}</p>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => copyToClipboard(order.transaction_id)}
+                          className="h-6 w-6 p-0 hover:bg-gray-100"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Currency</label>
+                      <p className="text-sm font-medium text-gray-900">{order.currency}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Total</label>
+                      <p className="text-sm font-bold text-gray-900">{formatCurrency(order.total)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Invoice Actions */}
+              <Card className="border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                    Invoice & Documents
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Button
+                      onClick={handleDownloadInvoice}
+                      className="gap-2 bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download Invoice
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handlePrintInvoice}
+                      className="gap-2 border-gray-200 hover:bg-gray-50"
+                    >
+                      <Printer className="h-4 w-4" />
+                      Print Invoice
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Invoice will include all order details, customer information, and payment summary.
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Order Timeline */}
+              <Card className="border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900">
+                    <Calendar className="h-5 w-5 text-blue-600" />
+                    Order Timeline
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full mt-1 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-gray-900">Order Created</p>
+                      <p className="text-xs text-gray-600">
+                        {format(new Date(order.date_created), 'MMM dd, yyyy HH:mm')}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {order.date_modified !== order.date_created && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-3 h-3 bg-green-500 rounded-full mt-1 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900">Last Updated</p>
+                        <p className="text-xs text-gray-600">
+                          {format(new Date(order.date_modified), 'MMM dd, yyyy HH:mm')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}

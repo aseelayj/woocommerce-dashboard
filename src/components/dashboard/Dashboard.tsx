@@ -12,7 +12,9 @@ import {
   Calendar,
   ArrowUpRight,
   ArrowDownRight,
-  RefreshCw
+  RefreshCw,
+  Download,
+  Eye
 } from 'lucide-react';
 import { Shop } from '@/types';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
@@ -20,6 +22,8 @@ import { format, subDays } from 'date-fns';
 import { apiCache } from '@/lib/cache';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
+import { generateInvoicePDF } from '@/components/orders/InvoicePDF';
+import { toast } from 'sonner';
 
 interface DashboardProps {
   activeShop: Shop | null;
@@ -335,6 +339,26 @@ export function Dashboard({ activeShop }: DashboardProps) {
     }).format(amount);
   };
 
+  const handleDownloadInvoice = async (orderId: number) => {
+    if (!activeShop) return;
+
+    try {
+      toast.info('Generating invoice...');
+      const api = new WooCommerceAPI(isUsingRealAPI() ? activeShop.id : activeShop);
+      const order = await api.getOrder(orderId);
+      
+      if (order) {
+        await generateInvoicePDF(order, activeShop);
+        toast.success('Invoice downloaded successfully');
+      } else {
+        toast.error('Order not found');
+      }
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      toast.error('Failed to generate invoice');
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -592,8 +616,19 @@ export function Dashboard({ activeShop }: DashboardProps) {
                         {format(new Date(order.date), 'MMM dd, yyyy HH:mm')}
                       </p>
                     </div>
-                    <div className="text-right flex-shrink-0 ml-4">
-                      <p className="font-bold text-gray-900">{formatCurrency(parseFloat(order.total))}</p>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                      <div className="text-right">
+                        <p className="font-bold text-gray-900">{formatCurrency(parseFloat(order.total))}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDownloadInvoice(order.id)}
+                        className="h-8 w-8 p-0"
+                        title="Download Invoice"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 ))

@@ -13,6 +13,8 @@ import {
   X
 } from 'lucide-react';
 import { Shop } from '@/types';
+import { usePrefetchStoreStats } from '@/hooks/useStoreStats';
+import { usePrefetchOrders } from '@/hooks/useOrders';
 
 type ActiveView = 'dashboard' | 'orders' | 'settings';
 
@@ -43,6 +45,25 @@ export function Sidebar({
   onClose,
   className 
 }: SidebarProps) {
+  const prefetchStoreStats = usePrefetchStoreStats();
+  const prefetchOrders = usePrefetchOrders();
+  
+  // Prefetch data when hovering over a store
+  const handleStoreHover = (shop: Shop) => {
+    if (shop.isActive) {
+      // Prefetch dashboard stats
+      prefetchStoreStats(shop);
+      
+      // Prefetch recent orders
+      const now = new Date();
+      const filters = {
+        dateFrom: new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0],
+        dateTo: now.toISOString().split('T')[0]
+      };
+      prefetchOrders(shop, filters, { page: 1, limit: 5, sortBy: 'date_created', sortOrder: 'desc' });
+    }
+  };
+  
   const menuItems = [
     { 
       id: 'dashboard' as ActiveView, 
@@ -71,7 +92,7 @@ export function Sidebar({
               <Store className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg md:text-xl text-gray-900">WooCommerce</h1>
+              <h1 className="font-bold text-lg md:text-xl text-gray-900">SocialMediaDaily</h1>
               <p className="text-xs md:text-sm text-gray-500">Order Management</p>
             </div>
           </div>
@@ -221,6 +242,7 @@ export function Sidebar({
                       : 'hover:bg-gray-50 border border-transparent'
                   )}
                   onClick={() => onShopSelect(shop)}
+                  onMouseEnter={() => handleStoreHover(shop)}
                 >
                   <div className="flex items-center gap-2 md:gap-3 w-full">
                     <div className={cn(

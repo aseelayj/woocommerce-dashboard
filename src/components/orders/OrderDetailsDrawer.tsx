@@ -33,7 +33,8 @@ import {
   Building,
   Download,
   FileText,
-  Printer
+  Printer,
+  RefreshCw
 } from 'lucide-react';
 import { Order, OrderStatus, Shop } from '@/types';
 import { format } from 'date-fns';
@@ -41,6 +42,7 @@ import { toast } from 'sonner';
 import { downloadInvoice } from './InvoiceGenerator';
 import { downloadInvoicePDF, printInvoicePDF } from './InvoicePDF';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
+import { useUpdateOrderStatus } from '@/hooks/useOrders';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,6 +68,7 @@ export function OrderDetailsDrawer({
   const [isEditingStatus, setIsEditingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState<OrderStatus | ''>('');
   const { storeInfo } = useStoreInfo(shop || null);
+  const updateOrderStatus = useUpdateOrderStatus(shop);
 
   if (!order) return null;
 
@@ -81,12 +84,23 @@ export function OrderDetailsDrawer({
     toast.success('Copied to clipboard');
   };
 
-  const handleStatusUpdate = () => {
-    if (newStatus && onStatusUpdate) {
-      onStatusUpdate(order.id, newStatus);
-      setIsEditingStatus(false);
-      setNewStatus('');
-      toast.success('Order status updated successfully');
+  const handleStatusUpdate = async () => {
+    if (newStatus && shop) {
+      try {
+        await updateOrderStatus.mutateAsync({ 
+          orderId: order.id, 
+          status: newStatus 
+        });
+        toast.success(`Order status updated to ${newStatus}`);
+        setIsEditingStatus(false);
+        setNewStatus('');
+        // Call the original callback if provided
+        if (onStatusUpdate) {
+          onStatusUpdate(order.id, newStatus);
+        }
+      } catch (error) {
+        toast.error('Failed to update order status');
+      }
     }
   };
 
@@ -169,8 +183,17 @@ export function OrderDetailsDrawer({
                       <SelectItem value="failed">Failed</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button size="sm" onClick={handleStatusUpdate} disabled={!newStatus} className="bg-blue-600 hover:bg-blue-700">
-                    <Save className="h-3 w-3" />
+                  <Button 
+                    size="sm" 
+                    onClick={handleStatusUpdate} 
+                    disabled={!newStatus || updateOrderStatus.isPending} 
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {updateOrderStatus.isPending ? (
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Save className="h-3 w-3" />
+                    )}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setIsEditingStatus(false)} className="border-gray-200">
                     <X className="h-3 w-3" />

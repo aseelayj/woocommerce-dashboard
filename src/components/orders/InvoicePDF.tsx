@@ -25,83 +25,138 @@ export async function generateInvoicePDF({ order, shop }: InvoicePDFProps): Prom
     }).format(parseFloat(amount));
   };
 
-  const subtotal = order.line_items.reduce((sum, item) => sum + parseFloat(item.total), 0);
+  const subtotal = order.line_items.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
+  
+  // Calculate total discount including coupon lines
+  const discountFromItems = order.line_items.reduce((sum, item) => {
+    return sum + (parseFloat(item.subtotal) - parseFloat(item.total));
+  }, 0);
+  
+  const couponDiscount = order.coupon_lines?.reduce((sum, coupon: any) => {
+    return sum + Math.abs(parseFloat(coupon.discount || '0'));
+  }, 0) || 0;
+  
+  const totalDiscount = parseFloat(order.discount_total) || (discountFromItems + couponDiscount);
 
   tempDiv.innerHTML = `
     <div style="color: #333; line-height: 1.6;">
       <!-- Header -->
-      <div style="display: flex; justify-content: space-between; margin-bottom: 40px;">
-        <div>
+      <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 50px; padding-bottom: 30px; border-bottom: 2px solid #e5e7eb;">
+        <div style="max-width: 60%;">
           ${shop?.storeInfo?.store_name || shop?.name ? `
-            <h1 style="margin: 0 0 10px 0; color: #1e40af; font-size: 28px;">
+            <h1 style="margin: 0 0 20px 0; color: #1e40af; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">
               ${shop.storeInfo?.store_name || shop.name}
             </h1>
           ` : ''}
           
-          ${shop?.storeInfo?.store_address ? `
-            <p style="margin: 2px 0; color: #666;">
-              ${shop.storeInfo.store_address}
-              ${shop.storeInfo.store_city ? `, ${shop.storeInfo.store_city}` : ''}
-              ${shop.storeInfo.store_postcode ? ` ${shop.storeInfo.store_postcode}` : ''}
-              ${shop.storeInfo.store_country ? `, ${shop.storeInfo.store_country}` : ''}
-            </p>
-          ` : shop?.baseUrl ? `
-            <p style="margin: 2px 0; color: #666;">${shop.baseUrl}</p>
-          ` : ''}
-          
-          ${shop?.storeInfo?.store_email ? `
-            <p style="margin: 2px 0; color: #666;">Email: ${shop.storeInfo.store_email}</p>
-          ` : shop ? `
-            <p style="margin: 2px 0; color: #666;">Email: support@${new URL(shop.baseUrl).hostname}</p>
-          ` : ''}
+          <div style="color: #6b7280; font-size: 14px; line-height: 1.8;">
+            ${shop?.storeInfo?.store_address ? `
+              <div style="margin-bottom: 8px;">
+                <div>${shop.storeInfo.store_address}</div>
+                <div>
+                  ${shop.storeInfo.store_city ? `${shop.storeInfo.store_city}` : ''}${shop.storeInfo.store_postcode ? `, ${shop.storeInfo.store_postcode}` : ''}
+                </div>
+                ${shop.storeInfo.store_country ? `<div>${shop.storeInfo.store_country}</div>` : ''}
+              </div>
+            ` : ''}
+            
+            <div style="margin-top: 12px;">
+              ${shop?.baseUrl ? `
+                <div style="margin-bottom: 4px;">
+                  <span style="font-weight: 600; color: #374151;">Website:</span> 
+                  <span style="color: #1e40af;">${new URL(shop.baseUrl).hostname}</span>
+                </div>
+              ` : ''}
+              
+              ${shop?.storeInfo?.store_email || shop ? `
+                <div>
+                  <span style="font-weight: 600; color: #374151;">Email:</span> 
+                  <span style="color: #1e40af;">${shop.storeInfo?.store_email || `support@${new URL(shop.baseUrl).hostname}`}</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
           
           ${!shop || (!shop.name && !shop.storeInfo?.store_name) ? `
-            <div style="margin-bottom: 20px;">
-              <p style="color: #666; font-style: italic;">Shop information not available</p>
+            <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin-bottom: 20px;">
+              <p style="color: #6b7280; font-style: italic; margin: 0;">Store information not available</p>
             </div>
           ` : ''}
         </div>
-        <div style="text-align: right;">
-          <h2 style="margin: 0 0 10px 0; color: #1e40af; font-size: 24px;">INVOICE</h2>
-          <p style="margin: 2px 0;"><strong>Invoice #:</strong> ${order.number}</p>
-          <p style="margin: 2px 0;"><strong>Date:</strong> ${format(new Date(order.date_created), 'MMM dd, yyyy')}</p>
-          <p style="margin: 2px 0;">
-            <strong>Status:</strong> 
-            <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 14px; font-weight: 500; 
-              ${order.status === 'completed' ? 'background: #d1fae5; color: #065f46;' : ''}
-              ${order.status === 'processing' ? 'background: #dbeafe; color: #1e3a8a;' : ''}
-              ${order.status === 'pending' ? 'background: #fef3c7; color: #92400e;' : ''}
-              ${order.status === 'cancelled' ? 'background: #fee2e2; color: #991b1b;' : ''}
-              ${order.status === 'refunded' ? 'background: #e9d5ff; color: #6b21a8;' : ''}
-              ${order.status === 'failed' ? 'background: #fee2e2; color: #991b1b;' : ''}
-            ">
-              ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-            </span>
-          </p>
+        
+        <div style="text-align: right; min-width: 250px;">
+          <h2 style="margin: 0 0 24px 0; color: #111827; font-size: 36px; font-weight: 700; letter-spacing: -0.5px;">INVOICE</h2>
+          
+          <div style="font-size: 14px;">
+            <div style="margin-bottom: 16px;">
+              <div style="color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Invoice Number</div>
+              <div style="font-weight: 700; color: #111827; font-size: 20px;">#${order.number}</div>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+              <div style="color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Date Issued</div>
+              <div style="font-weight: 600; color: #374151; font-size: 16px;">${format(new Date(order.date_created), 'MMM dd, yyyy')}</div>
+            </div>
+            
+            <div>
+              <div style="color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Status</div>
+              <div style="font-size: 16px; font-weight: 700; text-transform: uppercase;
+                ${order.status === 'completed' ? 'color: #065f46;' : ''}
+                ${order.status === 'processing' ? 'color: #1e3a8a;' : ''}
+                ${order.status === 'pending' ? 'color: #92400e;' : ''}
+                ${order.status === 'cancelled' ? 'color: #991b1b;' : ''}
+                ${order.status === 'refunded' ? 'color: #6b21a8;' : ''}
+                ${order.status === 'failed' ? 'color: #991b1b;' : ''}
+              ">
+                ${order.status}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Addresses -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px;">
-        <div>
-          <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 14px; text-transform: uppercase;">Bill To</h3>
-          <p style="margin: 2px 0;"><strong>${order.billing.first_name} ${order.billing.last_name}</strong></p>
-          ${order.billing.company ? `<p style="margin: 2px 0;">${order.billing.company}</p>` : ''}
-          <p style="margin: 2px 0;">${order.billing.address_1}</p>
-          ${order.billing.address_2 ? `<p style="margin: 2px 0;">${order.billing.address_2}</p>` : ''}
-          <p style="margin: 2px 0;">${order.billing.city}, ${order.billing.state} ${order.billing.postcode}</p>
-          <p style="margin: 2px 0;">${order.billing.country}</p>
-          <p style="margin: 2px 0;">${order.billing.email}</p>
-          <p style="margin: 2px 0;">${order.billing.phone}</p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 40px;">
+        <div style="background: #f9fafb; padding: 24px; border-radius: 8px;">
+          <h3 style="margin: 0 0 16px 0; color: #1e40af; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Billing Information</h3>
+          <div style="color: #374151; font-size: 14px; line-height: 1.6;">
+            <div style="font-weight: 600; color: #111827; font-size: 16px; margin-bottom: 8px;">
+              ${order.billing.first_name} ${order.billing.last_name}
+            </div>
+            ${order.billing.company ? `<div style="margin-bottom: 4px; color: #6b7280;">${order.billing.company}</div>` : ''}
+            <div style="margin-bottom: 12px;">
+              <div>${order.billing.address_1}</div>
+              ${order.billing.address_2 ? `<div>${order.billing.address_2}</div>` : ''}
+              <div>${order.billing.city}, ${order.billing.state} ${order.billing.postcode}</div>
+              <div>${order.billing.country}</div>
+            </div>
+            <div style="padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 13px;">
+              <div style="margin-bottom: 4px;">
+                <span style="color: #6b7280;">Email:</span> 
+                <span style="color: #1e40af;">${order.billing.email}</span>
+              </div>
+              <div>
+                <span style="color: #6b7280;">Phone:</span> 
+                <span style="color: #374151;">${order.billing.phone}</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div>
-          <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 14px; text-transform: uppercase;">Ship To</h3>
-          <p style="margin: 2px 0;"><strong>${order.shipping.first_name} ${order.shipping.last_name}</strong></p>
-          ${order.shipping.company ? `<p style="margin: 2px 0;">${order.shipping.company}</p>` : ''}
-          <p style="margin: 2px 0;">${order.shipping.address_1}</p>
-          ${order.shipping.address_2 ? `<p style="margin: 2px 0;">${order.shipping.address_2}</p>` : ''}
-          <p style="margin: 2px 0;">${order.shipping.city}, ${order.shipping.state} ${order.shipping.postcode}</p>
-          <p style="margin: 2px 0;">${order.shipping.country}</p>
+        
+        <div style="background: #f9fafb; padding: 24px; border-radius: 8px;">
+          <h3 style="margin: 0 0 16px 0; color: #1e40af; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Shipping Information</h3>
+          <div style="color: #374151; font-size: 14px; line-height: 1.6;">
+            <div style="font-weight: 600; color: #111827; font-size: 16px; margin-bottom: 8px;">
+              ${order.shipping.first_name} ${order.shipping.last_name}
+            </div>
+            ${order.shipping.company ? `<div style="margin-bottom: 4px; color: #6b7280;">${order.shipping.company}</div>` : ''}
+            <div>
+              <div>${order.shipping.address_1}</div>
+              ${order.shipping.address_2 ? `<div>${order.shipping.address_2}</div>` : ''}
+              <div>${order.shipping.city}, ${order.shipping.state} ${order.shipping.postcode}</div>
+              <div>${order.shipping.country}</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -145,10 +200,10 @@ export async function generateInvoicePDF({ order, shop }: InvoicePDFProps): Prom
             <span>${formatCurrency(order.total_tax)}</span>
           </div>
         ` : ''}
-        ${parseFloat(order.discount_total) > 0 ? `
+        ${totalDiscount > 0 ? `
           <div style="display: flex; justify-content: space-between; padding: 8px 0; color: #059669;">
-            <span>Discount:</span>
-            <span>-${formatCurrency(order.discount_total)}</span>
+            <span>Discount${order.coupon_lines?.length > 0 ? ` (${order.coupon_lines.map((c: any) => c.code).join(', ')})` : ''}:</span>
+            <span>-${formatCurrency(totalDiscount.toString())}</span>
           </div>
         ` : ''}
         <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold; font-size: 18px; border-top: 2px solid #e5e7eb; margin-top: 10px; padding-top: 10px;">
@@ -165,10 +220,34 @@ export async function generateInvoicePDF({ order, shop }: InvoicePDFProps): Prom
       ` : ''}
 
       <!-- Footer -->
-      <div style="margin-top: 60px; text-align: center; color: #666; font-size: 14px;">
-        <p>Thank you for your business!</p>
-        <p>Payment Method: ${order.payment_method_title || 'N/A'}</p>
-        ${order.transaction_id ? `<p>Transaction ID: ${order.transaction_id}</p>` : ''}
+      <div style="margin-top: 80px; padding-top: 40px; border-top: 2px solid #e5e7eb;">
+        <div style="background: #f9fafb; border-radius: 12px; padding: 30px; text-align: center; margin-bottom: 20px;">
+          <h3 style="margin: 0 0 16px 0; color: #1e40af; font-size: 20px; font-weight: 600;">Thank You for Your Business!</h3>
+          <p style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
+            We appreciate your trust in us. If you have any questions about this invoice,<br>
+            please don't hesitate to contact us.
+          </p>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px 0;">
+          <div style="color: #6b7280; font-size: 13px;">
+            <div style="margin-bottom: 8px;">
+              <span style="font-weight: 600; color: #374151;">Payment Method:</span> 
+              <span style="color: #111827;">${order.payment_method_title || (order.payment_method ? order.payment_method.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not specified')}</span>
+            </div>
+            ${order.transaction_id ? `
+              <div>
+                <span style="font-weight: 600; color: #374151;">Transaction ID:</span> 
+                <span style="color: #111827; font-family: monospace;">${order.transaction_id}</span>
+              </div>
+            ` : ''}
+          </div>
+          
+          <div style="text-align: right; color: #9ca3af; font-size: 12px;">
+            <div>Invoice generated on ${format(new Date(), 'MMM dd, yyyy')}</div>
+            ${shop?.name ? `<div style="margin-top: 4px;">© ${new Date().getFullYear()} ${shop.name}</div>` : ''}
+          </div>
+        </div>
       </div>
     </div>
   `;

@@ -13,8 +13,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
-  Download,
-  Eye
+  Download
 } from 'lucide-react';
 import { Shop } from '@/types';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
@@ -27,6 +26,7 @@ import { toast } from 'sonner';
 
 interface DashboardProps {
   activeShop: Shop | null;
+  onViewChange?: (view: 'dashboard' | 'orders' | 'settings', options?: { filters?: any }) => void;
 }
 
 interface DashboardStats {
@@ -51,7 +51,7 @@ interface RecentOrder {
   date: string;
 }
 
-export function Dashboard({ activeShop }: DashboardProps) {
+export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -650,21 +650,35 @@ export function Dashboard({ activeShop }: DashboardProps) {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Button variant="outline" className="h-auto p-4 border-gray-200 hover:bg-gray-50">
+            <Button 
+              variant="outline" 
+              className="h-auto p-4 border-gray-200 hover:bg-gray-50"
+              onClick={() => onViewChange?.('orders')}
+            >
               <div className="text-center">
                 <ShoppingCart className="h-5 w-5 md:h-6 md:w-6 mx-auto mb-2 text-blue-600" />
                 <p className="font-medium text-gray-900 text-sm md:text-base">View All Orders</p>
                 <p className="text-xs text-gray-500">Manage your orders</p>
               </div>
             </Button>
-            <Button variant="outline" className="h-auto p-4 border-gray-200 hover:bg-gray-50">
+            <Button 
+              variant="outline" 
+              className="h-auto p-4 border-gray-200 hover:bg-gray-50"
+              onClick={() => {
+                onViewChange?.('orders', { filters: { status: 'pending' } });
+              }}
+            >
               <div className="text-center">
                 <AlertCircle className="h-5 w-5 md:h-6 md:w-6 mx-auto mb-2 text-orange-600" />
                 <p className="font-medium text-gray-900 text-sm md:text-base">Pending Orders</p>
                 <p className="text-xs text-gray-500">Review pending orders</p>
               </div>
             </Button>
-            <Button variant="outline" className="h-auto p-4 border-gray-200 hover:bg-gray-50 sm:col-span-2 lg:col-span-1">
+            <Button 
+              variant="outline" 
+              className="h-auto p-4 border-gray-200 hover:bg-gray-50 sm:col-span-2 lg:col-span-1"
+              onClick={() => onViewChange?.('orders')}
+            >
               <div className="text-center">
                 <Calendar className="h-5 w-5 md:h-6 md:w-6 mx-auto mb-2 text-green-600" />
                 <p className="font-medium text-gray-900 text-sm md:text-base">Reports</p>

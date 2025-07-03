@@ -17,7 +17,6 @@ import {
   RefreshCw,
   Key,
   Link,
-  Shield,
   Activity
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -269,56 +268,6 @@ export function Settings({ shops, activeShop, onAddShop, onEditShop, onShopUpdat
         </CardContent>
       </Card>
 
-      {/* API Security Tips */}
-      <Card className="border-gray-200 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg text-gray-900">
-            <Shield className="h-5 w-5 text-blue-600" />
-            API Security Best Practices
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-start gap-3">
-            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-gray-900">Use Read-Only Permissions</p>
-              <p className="text-sm text-gray-600">
-                When creating API keys, grant only read permissions unless write access is absolutely necessary.
-              </p>
-            </div>
-          </div>
-          <Separator />
-          <div className="flex items-start gap-3">
-            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-gray-900">Enable SSL/HTTPS</p>
-              <p className="text-sm text-gray-600">
-                Ensure your WooCommerce store uses HTTPS to encrypt API communications.
-              </p>
-            </div>
-          </div>
-          <Separator />
-          <div className="flex items-start gap-3">
-            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-gray-900">Rotate Keys Regularly</p>
-              <p className="text-sm text-gray-600">
-                Periodically regenerate your API keys to maintain security.
-              </p>
-            </div>
-          </div>
-          <Separator />
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-gray-900">Monitor API Usage</p>
-              <p className="text-sm text-gray-600">
-                Regularly check your WooCommerce API logs for any suspicious activity.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deletingShop} onOpenChange={() => setDeletingShop(null)}>

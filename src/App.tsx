@@ -4,7 +4,7 @@ import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Header } from '@/components/dashboard/Header';
 import { HeaderWithAuth } from '@/components/dashboard/HeaderWithAuth';
 import { Dashboard } from '@/components/dashboard/Dashboard';
-import { MultiStoreDashboard } from '@/components/dashboard/MultiStoreDashboard';
+import { MultiStoreDashboardWithQuery as MultiStoreDashboard } from '@/components/dashboard/MultiStoreDashboardWithQuery';
 import { OrdersTable } from '@/components/orders/OrdersTable';
 import { MultiStoreOrders } from '@/components/orders/MultiStoreOrders';
 import { OrderDetailsDrawer } from '@/components/orders/OrderDetailsDrawer';
@@ -14,6 +14,7 @@ import { WooCommerceAPI, shopAPI, isUsingRealAPI } from '@/lib/api-wrapper';
 import { Shop, Order, FilterOptions, PaginationOptions, OrderStatus } from '@/types';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 type ActiveView = 'dashboard' | 'orders' | 'settings';
 
@@ -129,7 +130,7 @@ function App() {
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const handleViewChange = (view: ActiveView) => {
+  const handleViewChange = (view: ActiveView, options?: { filters?: Partial<FilterOptions> }) => {
     setActiveView(view);
     setSelectedOrder(null);
     setSidebarOpen(false); // Close sidebar on mobile after selection
@@ -138,6 +139,11 @@ function App() {
       setOrders([]);
       setShouldAppend(false);
       setPagination(prev => ({ ...prev, page: 1 }));
+      
+      // Apply any filters passed with the navigation
+      if (options?.filters) {
+        setFilters(prev => ({ ...prev, ...options.filters }));
+      }
     }
   };
 
@@ -235,7 +241,7 @@ function App() {
         if (viewAllStores) {
           return <MultiStoreDashboard shops={shops} />;
         }
-        return <Dashboard activeShop={activeShop} />;
+        return <Dashboard activeShop={activeShop} onViewChange={setActiveView} />;
       case 'orders':
         if (viewAllStores) {
           return (
@@ -290,7 +296,8 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <ErrorBoundary>
+      <div className="flex h-screen bg-gray-50">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
@@ -395,6 +402,7 @@ function App() {
       {/* Toast Notifications */}
       <Toaster richColors position="top-right" />
     </div>
+    </ErrorBoundary>
   );
 }
 

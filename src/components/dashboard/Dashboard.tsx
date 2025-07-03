@@ -21,7 +21,7 @@ import { format, subDays } from 'date-fns';
 import { apiCache } from '@/lib/cache';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
-import { generateInvoicePDF } from '@/components/orders/InvoicePDF';
+import { downloadInvoicePDF } from '@/components/orders/InvoicePDF';
 import { toast } from 'sonner';
 
 interface DashboardProps {
@@ -348,7 +348,7 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
       const order = await api.getOrder(orderId);
       
       if (order) {
-        await generateInvoicePDF(order, activeShop);
+        await downloadInvoicePDF(order, activeShop);
         toast.success('Invoice downloaded successfully');
       } else {
         toast.error('Order not found');

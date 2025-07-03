@@ -1,4 +1,4 @@
-import { useQuery, useQueries, UseQueryResult, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
 import { Shop } from '@/types';
 import { format } from 'date-fns';
@@ -53,12 +53,12 @@ async function fetchStoreStats(shop: Shop, dateRange?: DateRange): Promise<Store
     // Parallel fetch for performance
     const [ordersResp, salesResp, statusPromises] = await Promise.all([
       // Get total order count
-      api.getOrders(dateFilters, { page: 1, limit: 1 }),
+      api.getOrders(dateFilters, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' }),
       // Get sales report if available
       api.getSalesReport ? api.getSalesReport(dateFilters).catch(() => null) : Promise.resolve(null),
       // Get status counts
       Promise.all(['completed', 'pending', 'processing', 'failed'].map(status =>
-        api.getOrders({ ...dateFilters, status }, { page: 1, limit: 1 })
+        api.getOrders({ ...dateFilters, status }, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' })
           .then(resp => ({ status, count: resp.total }))
       ))
     ]);
@@ -78,7 +78,7 @@ async function fetchStoreStats(shop: Shop, dateRange?: DateRange): Promise<Store
       // Fallback: fetch completed orders for revenue
       const completedOrders = await api.getOrders(
         { ...dateFilters, status: 'completed' },
-        { page: 1, limit: 100 }
+        { page: 1, limit: 100, sortBy: 'date_created', sortOrder: 'desc' }
       );
       totalRevenue = completedOrders.orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
     }

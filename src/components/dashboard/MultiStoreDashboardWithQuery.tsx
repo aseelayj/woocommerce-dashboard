@@ -18,7 +18,6 @@ import { format } from 'date-fns';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { useMultiStoreStats, useInvalidateStoreStats } from '@/hooks/useStoreStats';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface MultiStoreDashboardWithQueryProps {
   shops: Shop[];
@@ -33,7 +32,6 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
     };
   });
 
-  const queryClient = useQueryClient();
   const { invalidateAll } = useInvalidateStoreStats();
   
   // Use React Query hook

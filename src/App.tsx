@@ -15,6 +15,7 @@ import { Shop, Order, FilterOptions, PaginationOptions, OrderStatus } from '@/ty
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { useOrderNotifications, useNotificationSettings } from '@/hooks/useOrderNotifications';
 
 type ActiveView = 'dashboard' | 'orders' | 'settings';
 
@@ -32,6 +33,12 @@ function App() {
   const [editingShop, setEditingShop] = useState<Shop | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [prevFilters, setPrevFilters] = useState<FilterOptions | null>(null);
+  
+  // Notification settings
+  const { settings: notificationSettings } = useNotificationSettings();
+  
+  // Initialize order notifications
+  const { isPolling } = useOrderNotifications(shops, notificationSettings);
 
   // Filters and pagination
   const now = new Date();
@@ -45,6 +52,22 @@ function App() {
     sortBy: 'date_created',
     sortOrder: 'desc',
   });
+
+  // Handle navigation from notification
+  useEffect(() => {
+    const handleNavigateToOrder = (event: CustomEvent) => {
+      const { shop, order } = event.detail;
+      setActiveShop(shop);
+      setViewAllStores(false);
+      setActiveView('orders');
+      setSelectedOrder(order);
+    };
+    
+    window.addEventListener('navigate-to-order', handleNavigateToOrder as any);
+    return () => {
+      window.removeEventListener('navigate-to-order', handleNavigateToOrder as any);
+    };
+  }, []);
 
   // Initialize data
   useEffect(() => {
@@ -360,6 +383,7 @@ function App() {
               activeView={activeView}
               onRefresh={handleRefresh}
               isLoading={loading}
+              isPollingOrders={isPolling && notificationSettings.enabled}
             />
           ) : (
             <Header
@@ -367,6 +391,7 @@ function App() {
               activeView={activeView}
               onRefresh={handleRefresh}
               isLoading={loading}
+              isPollingOrders={isPolling && notificationSettings.enabled}
             />
           )}
         </div>

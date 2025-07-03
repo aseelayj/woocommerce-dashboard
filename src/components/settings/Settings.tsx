@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Shop } from '@/types';
 import { 
   Store, 
@@ -11,7 +10,6 @@ import {
   Trash2, 
   CheckCircle, 
   XCircle,
-  AlertCircle,
   ExternalLink,
   Plus,
   RefreshCw,
@@ -21,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { shopAPI } from '@/lib/api-wrapper';
+import { NotificationSettings } from './NotificationSettings';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -268,6 +267,8 @@ export function Settings({ shops, activeShop, onAddShop, onEditShop, onShopUpdat
         </CardContent>
       </Card>
 
+      {/* Notification Settings */}
+      <NotificationSettings />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deletingShop} onOpenChange={() => setDeletingShop(null)}>

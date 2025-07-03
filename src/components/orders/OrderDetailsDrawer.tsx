@@ -68,7 +68,7 @@ export function OrderDetailsDrawer({
   const [isEditingStatus, setIsEditingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState<OrderStatus | ''>('');
   const { storeInfo } = useStoreInfo(shop || null);
-  const updateOrderStatus = useUpdateOrderStatus(shop);
+  const updateOrderStatus = useUpdateOrderStatus(shop || null);
 
   if (!order) return null;
 

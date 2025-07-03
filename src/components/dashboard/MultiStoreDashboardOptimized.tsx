@@ -46,17 +46,6 @@ interface AggregatedStats {
   storeStats: StoreStats[];
 }
 
-// Optimization 1: Use a more efficient API endpoint that returns aggregated data
-interface OptimizedStoreData {
-  revenue: number;
-  orderCount: number;
-  statusCounts: {
-    completed: number;
-    pending: number;
-    processing: number;
-    failed: number;
-  };
-}
 
 export function MultiStoreDashboardOptimized({ shops }: MultiStoreDashboardOptimizedProps) {
   const [stats, setStats] = useState<AggregatedStats | null>(null);
@@ -107,14 +96,14 @@ export function MultiStoreDashboardOptimized({ shops }: MultiStoreDashboardOptim
       // In a real implementation, this would be a custom endpoint that returns all needed data
       const [ordersResp, salesResp] = await Promise.all([
         // Get total order count and revenue
-        api.getOrders(dateFilters, { page: 1, limit: 1 }),
+        api.getOrders(dateFilters, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' }),
         // Get sales report if available (mock this for now)
         api.getSalesReport ? api.getSalesReport(dateFilters) : null
       ]);
 
       // Optimization 6: Get status counts in a single query with aggregation
       const statusPromises = ['completed', 'pending', 'processing', 'failed'].map(status =>
-        api.getOrders({ ...dateFilters, status }, { page: 1, limit: 1 })
+        api.getOrders({ ...dateFilters, status }, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' })
           .then(resp => ({ status, count: resp.total }))
       );
       
@@ -132,7 +121,7 @@ export function MultiStoreDashboardOptimized({ shops }: MultiStoreDashboardOptim
         // Fallback: fetch only completed orders for revenue calculation
         const completedOrders = await api.getOrders(
           { ...dateFilters, status: 'completed' },
-          { page: 1, limit: 100 }
+          { page: 1, limit: 100, sortBy: 'date_created', sortOrder: 'desc' }
         );
         totalRevenue = completedOrders.orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
       }
@@ -163,7 +152,6 @@ export function MultiStoreDashboardOptimized({ shops }: MultiStoreDashboardOptim
   const loadStoresProgressively = useCallback(async () => {
     setLoading(true);
     const newLoadingStores = new Set<string>();
-    const newStoreData = new Map<string, StoreStats>();
 
     // Start loading all stores
     activeShops.forEach(shop => newLoadingStores.add(shop.name));

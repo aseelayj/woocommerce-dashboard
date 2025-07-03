@@ -5,7 +5,8 @@ import {
   Search, 
   User,
   RefreshCw,
-  LogOut
+  LogOut,
+  Bell
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -26,9 +27,10 @@ interface HeaderProps {
   activeView: ActiveView;
   onRefresh?: () => void;
   isLoading?: boolean;
+  isPollingOrders?: boolean;
 }
 
-export function HeaderWithAuth({ activeShop, activeView, onRefresh, isLoading }: HeaderProps) {
+export function HeaderWithAuth({ activeShop, activeView, onRefresh, isLoading, isPollingOrders }: HeaderProps) {
   const { user, signOut } = useAuth();
   
   const getPageTitle = () => {
@@ -82,6 +84,14 @@ export function HeaderWithAuth({ activeShop, activeView, onRefresh, isLoading }:
 
         {/* Actions */}
         <div className="flex items-center gap-3">
+          {/* Notification Indicator */}
+          {isPollingOrders && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-100">
+              <Bell className="h-3.5 w-3.5 text-blue-600 animate-pulse" />
+              <span className="text-xs font-medium text-blue-700">Monitoring orders</span>
+            </div>
+          )}
+          
           {/* Refresh Button */}
           {(activeView === 'orders' || activeView === 'dashboard') && (
             <Button

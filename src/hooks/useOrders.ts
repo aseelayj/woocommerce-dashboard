@@ -117,7 +117,7 @@ export function useUpdateOrderStatus(shop: Shop | null) {
 
       return { previousOrder };
     },
-    onError: (err, { orderId }, context) => {
+    onError: (_, { orderId }, context) => {
       if (!shop || !context) return;
       
       // Revert the optimistic update
@@ -131,7 +131,7 @@ export function useUpdateOrderStatus(shop: Shop | null) {
       // Invalidate to refetch
       queryClient.invalidateQueries({ queryKey: orderKeys.list(shop.id, {}) });
     },
-    onSettled: (data, error, { orderId }) => {
+    onSettled: (_, __, { orderId }) => {
       if (!shop) return;
       
       // Always refetch after error or success

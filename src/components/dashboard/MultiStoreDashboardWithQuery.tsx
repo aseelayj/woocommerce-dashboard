@@ -17,7 +17,9 @@ import { Shop } from '@/types';
 import { format } from 'date-fns';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
+import { getTranslatedStatus } from '@/lib/translations';
 import { useMultiStoreStats, useInvalidateStoreStats } from '@/hooks/useStoreStats';
+import { formatStoreCurrency } from '@/lib/currency';
 
 interface MultiStoreDashboardWithQueryProps {
   shops: Shop[];
@@ -37,11 +39,8 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
   // Use React Query hook
   const { data: stats, storeQueries, isLoading, isFetching, refetchAll } = useMultiStoreStats(shops, dateRange);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
+  const formatCurrency = (amount: number, shop?: Shop) => {
+    return formatStoreCurrency(amount, shop);
   };
 
   const StatsCardSkeleton = () => (
@@ -162,7 +161,7 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
                   {formatCurrency(stats.totalRevenue)}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Across all stores
+                  Mixed currencies (EUR/USD)
                 </p>
               </CardContent>
             </Card>
@@ -192,7 +191,7 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
                   {formatCurrency(stats.averageOrderValue)}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Across all stores
+                  Mixed currencies (EUR/USD)
                 </p>
               </CardContent>
             </Card>
@@ -226,25 +225,25 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
               <div className="text-2xl font-bold text-emerald-600">
                 {stats.completedOrders}
               </div>
-              <div className="text-sm text-gray-600">Completed</div>
+              <div className="text-sm text-gray-600">{getTranslatedStatus('completed')}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">
                 {stats.processingOrders}
               </div>
-              <div className="text-sm text-gray-600">Processing</div>
+              <div className="text-sm text-gray-600">{getTranslatedStatus('processing')}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-amber-600">
                 {stats.pendingOrders}
               </div>
-              <div className="text-sm text-gray-600">Pending</div>
+              <div className="text-sm text-gray-600">{getTranslatedStatus('pending')}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600">
                 {stats.failedOrders}
               </div>
-              <div className="text-sm text-gray-600">Failed</div>
+              <div className="text-sm text-gray-600">{getTranslatedStatus('failed')}</div>
             </div>
           </div>
         </CardContent>
@@ -292,13 +291,13 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
                     <div>
                       <span className="text-gray-600">Revenue:</span>
                       <p className="font-semibold text-gray-900">
-                        {formatCurrency(storeData.totalRevenue)}
+                        {formatCurrency(storeData.totalRevenue, shop)}
                       </p>
                     </div>
                     <div>
                       <span className="text-gray-600">Avg. Order:</span>
                       <p className="font-semibold text-gray-900">
-                        {formatCurrency(storeData.averageOrderValue)}
+                        {formatCurrency(storeData.averageOrderValue, shop)}
                       </p>
                     </div>
                     <div>

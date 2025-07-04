@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
+import { getTranslatedStatus } from '@/lib/translations';
 import {
   Select,
   SelectContent,
@@ -11,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { InfiniteScrollOrdersTable } from '@/components/orders/InfiniteScrollOrdersTable';
-import { Order, FilterOptions, PaginationOptions } from '@/types';
+import { Order, FilterOptions, PaginationOptions, Shop } from '@/types';
 
 interface OrdersTableProps {
   orders: Order[];
@@ -22,6 +23,8 @@ interface OrdersTableProps {
   onPaginationChange: (pagination: PaginationOptions) => void;
   filters: FilterOptions;
   pagination: PaginationOptions;
+  shop?: Shop | null;
+  onDownloadInvoice?: (order: Order) => void;
 }
 
 export function OrdersTable({
@@ -33,8 +36,11 @@ export function OrdersTable({
   onPaginationChange,
   filters,
   pagination,
+  shop,
+  onDownloadInvoice,
 }: OrdersTableProps) {
   const [localSearch, setLocalSearch] = useState(filters.search || '');
+  const [searchDebounceTimer, setSearchDebounceTimer] = useState<NodeJS.Timeout | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     if (filters.dateFrom && filters.dateTo) {
       return {
@@ -58,9 +64,19 @@ export function OrdersTable({
   // Handle search with debounce
   const handleSearch = (value: string) => {
     setLocalSearch(value);
-    // You could add debouncing here
-    onFiltersChange({ ...filters, search: value });
-    onPaginationChange({ ...pagination, page: 1 });
+    
+    // Clear existing timer
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
+    
+    // Set new timer for debounced search
+    const timer = setTimeout(() => {
+      onFiltersChange({ ...filters, search: value });
+      onPaginationChange({ ...pagination, page: 1 });
+    }, 500); // 500ms debounce
+    
+    setSearchDebounceTimer(timer);
   };
 
   const handleStatusChange = (status: string) => {
@@ -115,13 +131,13 @@ export function OrdersTable({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="processing">Processing</SelectItem>
-              <SelectItem value="on-hold">On Hold</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="pending">{getTranslatedStatus('pending')}</SelectItem>
+              <SelectItem value="processing">{getTranslatedStatus('processing')}</SelectItem>
+              <SelectItem value="on-hold">{getTranslatedStatus('on-hold')}</SelectItem>
+              <SelectItem value="completed">{getTranslatedStatus('completed')}</SelectItem>
+              <SelectItem value="cancelled">{getTranslatedStatus('cancelled')}</SelectItem>
+              <SelectItem value="refunded">{getTranslatedStatus('refunded')}</SelectItem>
+              <SelectItem value="failed">{getTranslatedStatus('failed')}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -153,6 +169,8 @@ export function OrdersTable({
             loadMore={handleLoadMore}
             hasMore={orders.length < total}
             loading={loading}
+            shop={shop}
+            onDownloadInvoice={onDownloadInvoice}
           />
 
           {/* Status Info */}

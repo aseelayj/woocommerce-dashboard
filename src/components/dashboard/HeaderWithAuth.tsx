@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -28,10 +29,12 @@ interface HeaderProps {
   onRefresh?: () => void;
   isLoading?: boolean;
   isPollingOrders?: boolean;
+  onSearch?: (searchTerm: string) => void;
 }
 
-export function HeaderWithAuth({ activeShop, activeView, onRefresh, isLoading, isPollingOrders }: HeaderProps) {
+export function HeaderWithAuth({ activeShop, activeView, onRefresh, isLoading, isPollingOrders, onSearch }: HeaderProps) {
   const { user, signOut } = useAuth();
+  const [searchValue, setSearchValue] = useState('');
   
   const getPageTitle = () => {
     switch (activeView) {
@@ -69,13 +72,18 @@ export function HeaderWithAuth({ activeShop, activeView, onRefresh, isLoading, i
         </div>
 
         {/* Search - Only show on orders page */}
-        {activeView === 'orders' && (
+        {activeView === 'orders' && onSearch && (
           <div className="flex-1 max-w-md">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 type="search"
                 placeholder="Search orders, customers..."
+                value={searchValue}
+                onChange={(e) => {
+                  setSearchValue(e.target.value);
+                  onSearch(e.target.value);
+                }}
                 className="pl-10 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
               />
             </div>

@@ -63,8 +63,15 @@ export interface OrderItem {
   tax_class: string;
   subtotal: string;
   total: string;
-  image?: string;
+  image?: string | { id: string; src: string };
   price: string;
+  meta_data?: Array<{
+    id: number;
+    key: string;
+    value: any;
+    display_key?: string;
+    display_value?: string;
+  }>;
 }
 
 export interface Order {
@@ -99,6 +106,17 @@ export interface Order {
   coupon_lines: any[];
   refunds: any[];
   customer: Customer;
+  meta_data?: Array<{
+    id: number;
+    key: string;
+    value: any;
+  }>;
+  _links?: {
+    self?: Array<{ href: string }>;
+    collection?: Array<{ href: string }>;
+    customer?: Array<{ href: string }>;
+    [key: string]: Array<{ href: string }> | undefined;
+  };
 }
 
 export interface OrdersResponse {

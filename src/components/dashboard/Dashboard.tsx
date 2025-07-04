@@ -23,6 +23,8 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { downloadInvoicePDF } from '@/components/orders/InvoicePDF';
 import { toast } from 'sonner';
+import { getStoreCurrency } from '@/lib/currency';
+import { getTranslatedStatus } from '@/lib/translations';
 
 interface DashboardProps {
   activeShop: Shop | null;
@@ -140,7 +142,6 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
           date_min: dateFilters.dateFrom,
           date_max: dateFilters.dateTo
         });
-        console.log('Sales report:', salesReport);
         
         if (salesReport && salesReport.total_sales) {
           totalRevenue = parseFloat(salesReport.total_sales);
@@ -333,9 +334,12 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    const currency = getStoreCurrency(activeShop);
+    const locale = currency === 'EUR' ? 'de-DE' : 'en-US';
+    
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
     }).format(amount);
   };
 
@@ -566,28 +570,28 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-emerald-500 rounded-full" />
-                <span className="text-sm text-gray-600">Completed</span>
+                <span className="text-sm text-gray-600">{getTranslatedStatus('completed')}</span>
               </div>
               <span className="font-semibold text-gray-900">{stats?.completedOrders || 0}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-blue-500 rounded-full" />
-                <span className="text-sm text-gray-600">Processing</span>
+                <span className="text-sm text-gray-600">{getTranslatedStatus('processing')}</span>
               </div>
               <span className="font-semibold text-gray-900">{stats?.processingOrders || 0}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-amber-500 rounded-full" />
-                <span className="text-sm text-gray-600">Pending</span>
+                <span className="text-sm text-gray-600">{getTranslatedStatus('pending')}</span>
               </div>
               <span className="font-semibold text-gray-900">{stats?.pendingOrders || 0}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-red-500 rounded-full" />
-                <span className="text-sm text-gray-600">Failed</span>
+                <span className="text-sm text-gray-600">{getTranslatedStatus('failed')}</span>
               </div>
               <span className="font-semibold text-gray-900">{stats?.failedOrders || 0}</span>
             </div>
@@ -608,7 +612,7 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                         <span className="font-semibold text-gray-900">#{order.number}</span>
                         <Badge className={`text-xs w-fit ${getStatusColor(order.status)}`}>
-                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          {getTranslatedStatus(order.status)}
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-600 mt-1 truncate">{order.customer}</p>

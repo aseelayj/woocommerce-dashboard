@@ -16,10 +16,12 @@ import { Shop, Order } from '@/types';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
 import { format } from 'date-fns';
 import { apiCache } from '@/lib/cache';
+import { getTranslatedStatus } from '@/lib/translations';
 
 interface MultiStoreOrdersProps {
   shops: Shop[];
   onOrderSelect: (order: Order & { shopName?: string; shopId?: string }) => void;
+  onDownloadInvoice?: (order: Order & { shopName?: string; shopId?: string }) => void;
 }
 
 interface OrderWithShop extends Order {
@@ -27,7 +29,7 @@ interface OrderWithShop extends Order {
   shopId: string;
 }
 
-export function MultiStoreOrders({ shops, onOrderSelect }: MultiStoreOrdersProps) {
+export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: MultiStoreOrdersProps) {
   const [orders, setOrders] = useState<OrderWithShop[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingShops, setLoadingShops] = useState<string[]>([]);
@@ -220,13 +222,13 @@ export function MultiStoreOrders({ shops, onOrderSelect }: MultiStoreOrdersProps
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="processing">Processing</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="on-hold">On Hold</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="pending">{getTranslatedStatus('pending')}</SelectItem>
+              <SelectItem value="processing">{getTranslatedStatus('processing')}</SelectItem>
+              <SelectItem value="completed">{getTranslatedStatus('completed')}</SelectItem>
+              <SelectItem value="on-hold">{getTranslatedStatus('on-hold')}</SelectItem>
+              <SelectItem value="cancelled">{getTranslatedStatus('cancelled')}</SelectItem>
+              <SelectItem value="refunded">{getTranslatedStatus('refunded')}</SelectItem>
+              <SelectItem value="failed">{getTranslatedStatus('failed')}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -278,6 +280,8 @@ export function MultiStoreOrders({ shops, onOrderSelect }: MultiStoreOrdersProps
             loadMore={loadMore}
             hasMore={hasMore && filteredOrders.length > 0}
             loading={loading}
+            shops={shops}
+            onDownloadInvoice={onDownloadInvoice}
           />
           
           {/* Status Info */}

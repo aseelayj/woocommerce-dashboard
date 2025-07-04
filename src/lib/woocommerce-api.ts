@@ -94,7 +94,6 @@ export class WooCommerceAPI {
     // Check cache first
     const cached = apiCache.get<any>(cacheKey);
     if (cached) {
-      console.log('Returning cached orders');
       return cached;
     }
     

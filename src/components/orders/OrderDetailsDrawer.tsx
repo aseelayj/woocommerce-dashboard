@@ -43,6 +43,8 @@ import { downloadInvoice } from './InvoiceGenerator';
 import { downloadInvoicePDF, printInvoicePDF } from './InvoicePDF';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
 import { useUpdateOrderStatus } from '@/hooks/useOrders';
+import { getStoreCurrency } from '@/lib/currency';
+import { getTranslatedStatus } from '@/lib/translations';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,9 +75,12 @@ export function OrderDetailsDrawer({
   if (!order) return null;
 
   const formatCurrency = (amount: string) => {
-    return new Intl.NumberFormat('en-US', {
+    const currency = getStoreCurrency(shop);
+    const locale = currency === 'EUR' ? 'de-DE' : 'en-US';
+    
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency: storeInfo?.currency || order.currency || 'USD',
+      currency: currency,
     }).format(parseFloat(amount));
   };
 
@@ -157,15 +162,25 @@ export function OrderDetailsDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-white">
+      <SheetContent className="w-full sm:max-w-5xl overflow-y-auto bg-white">
         <SheetHeader className="space-y-4 pb-6 border-b border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
               <SheetTitle className="text-2xl font-bold text-gray-900">Order #{order.number}</SheetTitle>
               <SheetDescription className="text-gray-600">
                 Created on {format(new Date(order.date_created), 'MMMM dd, yyyy at HH:mm')}
               </SheetDescription>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-8 w-8 -mr-2 -mt-2"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {isEditingStatus ? (
                 <div className="flex items-center gap-2">
@@ -174,13 +189,13 @@ export function OrderDetailsDrawer({
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="processing">Processing</SelectItem>
-                      <SelectItem value="on-hold">On Hold</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                      <SelectItem value="refunded">Refunded</SelectItem>
-                      <SelectItem value="failed">Failed</SelectItem>
+                      <SelectItem value="pending">{getTranslatedStatus('pending')}</SelectItem>
+                      <SelectItem value="processing">{getTranslatedStatus('processing')}</SelectItem>
+                      <SelectItem value="on-hold">{getTranslatedStatus('on-hold')}</SelectItem>
+                      <SelectItem value="completed">{getTranslatedStatus('completed')}</SelectItem>
+                      <SelectItem value="cancelled">{getTranslatedStatus('cancelled')}</SelectItem>
+                      <SelectItem value="refunded">{getTranslatedStatus('refunded')}</SelectItem>
+                      <SelectItem value="failed">{getTranslatedStatus('failed')}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button 
@@ -277,26 +292,219 @@ export function OrderDetailsDrawer({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {orderItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-4 p-4 border border-gray-100 rounded-lg bg-gray-50">
-                      {item.image && (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-16 h-16 object-cover rounded-lg border border-gray-200"
-                        />
-                      )}
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900">{item.name}</h4>
-                        <p className="text-sm text-gray-600">
-                          Quantity: {item.quantity} × {formatCurrency(item.price)}
-                        </p>
+                  {orderItems.map((item) => {
+                    // Format metadata for better display
+                    const formatMetaValue = (key: string, value: any): string => {
+                      // Convert to string first
+                      let strValue = String(value);
+                      
+                      // Handle HTML entities - do this first
+                      if (strValue.includes('&#')) {
+                        strValue = strValue
+                          .replace(/&#8364;/g, '€')
+                          .replace(/&#36;/g, '$')
+                          .replace(/&#163;/g, '£')
+                          .replace(/&#8482;/g, '™')
+                          .replace(/&#174;/g, '®')
+                          .replace(/&#169;/g, '©')
+                          .replace(/&amp;/g, '&');
+                      }
+                      
+                      // Clean up values
+                      const lowerKey = key.toLowerCase();
+                      
+                      // Handle "Total:" prefix
+                      if (lowerKey === 'total' && strValue.includes(':')) {
+                        strValue = strValue.replace('Total:', '').trim();
+                      }
+                      
+                      // Handle package/view count like "1.000 (2,99 €)"
+                      if (lowerKey.includes('anzahl') || lowerKey.includes('views')) {
+                        // Extract just the number if it has price in parentheses
+                        const match = strValue.match(/^([\d.,]+)\s*\(/);
+                        if (match) {
+                          return match[1];
+                        }
+                      }
+                      
+                      // Handle specific patterns like "Views + Reichweite + Impressionen"
+                      if (lowerKey === 'option' || lowerKey === 'option:') {
+                        return strValue; // Keep as is, it's already clean
+                      }
+                      
+                      // Handle URLs
+                      if (strValue.startsWith('http://') || strValue.startsWith('https://')) {
+                        return strValue;
+                      }
+                      
+                      if (typeof value === 'boolean') {
+                        return value ? 'Yes' : 'No';
+                      }
+                      if (value === 'checked') return '✓';
+                      if (value === null || value === undefined || value === '') return '-';
+                      
+                      return strValue;
+                    };
+
+                    const formatMetaKey = (key: string): string => {
+                      // Remove trailing :: from keys and normalize
+                      const cleanKey = key
+                        .replace(/::$/, '')
+                        .toLowerCase()
+                        .trim();
+                      
+                      // Special handling for known keys (try multiple variations)
+                      const keyMap: { [key: string]: string } = {
+                        'option': 'Package',
+                        'option:': 'Package',
+                        'anzahl der views': 'View Count',
+                        'anzahl der views:': 'View Count',
+                        'anzahl der follower': 'Follower Count',
+                        'anzahl der follower:': 'Follower Count',
+                        'ig video urls': 'Instagram URL',
+                        'ig video urls: (verteilung auf bis zu 5 videos möglich)': 'Instagram URL',
+                        'total': 'Package Total',
+                        'total:': 'Package Total',
+                      };
+                      
+                      // Check if we have a mapping
+                      if (keyMap[cleanKey]) {
+                        return keyMap[cleanKey];
+                      }
+                      
+                      // Convert snake_case or camelCase to Title Case
+                      return key
+                        .replace(/::$/, '')
+                        .replace(/:/g, '')
+                        .replace(/_/g, ' ')
+                        .replace(/([A-Z])/g, ' $1')
+                        .trim()
+                        .split(' ')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                        .join(' ')
+                        .replace(/\s+/g, ' ');
+                    };
+
+                    return (
+                      <div key={item.id} className="p-4 border border-gray-100 rounded-lg bg-gray-50">
+                        <div className="flex items-start gap-4">
+                          <div className="relative">
+                            {(() => {
+                              // Try to find image in different possible locations
+                              let imageUrl = null;
+                              
+                              // Check if image is an object with src property
+                              if (item.image) {
+                                if (typeof item.image === 'string') {
+                                  imageUrl = item.image;
+                                } else if (item.image.src) {
+                                  imageUrl = item.image.src;
+                                }
+                              }
+                              
+                              // Check if image might be in meta_data
+                              if (!imageUrl && item.meta_data) {
+                                const imageMeta = item.meta_data.find(meta => 
+                                  meta.key.toLowerCase().includes('image') || 
+                                  meta.key.toLowerCase().includes('thumbnail')
+                                );
+                                if (imageMeta?.value) {
+                                  imageUrl = imageMeta.value;
+                                }
+                              }
+                              
+                              return imageUrl ? (
+                                <>
+                                  <img
+                                    src={imageUrl}
+                                    alt={item.name}
+                                    className="w-20 h-20 object-cover rounded-lg border border-gray-200 flex-shrink-0"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      const fallback = e.currentTarget.nextElementSibling;
+                                      if (fallback) fallback.classList.remove('hidden');
+                                    }}
+                                  />
+                                  <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 hidden">
+                                    <Package className="h-8 w-8 text-gray-400" />
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                  <Package className="h-8 w-8 text-gray-400" />
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between gap-4 mb-2">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-gray-900 text-base">{item.name}</h4>
+                                <p className="text-sm text-gray-600 mt-1">
+                                  <span className="text-gray-500">Qty:</span> {item.quantity} × {formatCurrency(item.price)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-gray-900 text-lg">{formatCurrency(item.total)}</p>
+                              </div>
+                            </div>
+                            
+                            {/* Display metadata if available */}
+                            {item.meta_data && item.meta_data.length > 0 && (
+                              <div className="mt-4 bg-gray-50 rounded-lg p-4">
+                                <div className="overflow-x-auto">
+                                  <table className="w-full">
+                                    <tbody>
+                                      {/* Sort fields: regular fields first, then technical fields */}
+                                      {[...item.meta_data]
+                                        .sort((a, b) => {
+                                          const aIsTechnical = a.key.startsWith('_');
+                                          const bIsTechnical = b.key.startsWith('_');
+                                          if (aIsTechnical && !bIsTechnical) return 1;
+                                          if (!aIsTechnical && bIsTechnical) return -1;
+                                          return 0;
+                                        })
+                                        .map((meta, index) => {
+                                        const isTechnical = meta.key.startsWith('_');
+                                        const formattedKey = isTechnical ? meta.key : formatMetaKey(meta.key);
+                                        const formattedValue = formatMetaValue(meta.key, meta.value);
+                                        const isUrl = typeof formattedValue === 'string' && 
+                                                     (formattedValue.startsWith('http://') || formattedValue.startsWith('https://'));
+                                        
+                                        return (
+                                          <tr key={meta.id} className={`${index !== 0 ? 'border-t border-gray-200' : ''}`}>
+                                            <td className={`py-3 pr-6 text-sm align-top ${isTechnical ? 'font-mono text-gray-500' : 'font-medium text-gray-700'}`} style={{ width: '40%' }}>
+                                              {formattedKey}
+                                            </td>
+                                            <td className="py-3 text-sm">
+                                              {isUrl ? (
+                                                <a 
+                                                  href={formattedValue} 
+                                                  target="_blank" 
+                                                  rel="noopener noreferrer"
+                                                  className="text-blue-600 hover:text-blue-700 underline break-all"
+                                                >
+                                                  {formattedValue}
+                                                </a>
+                                              ) : (
+                                                <span className={`break-words ${isTechnical ? 'font-mono text-gray-500' : 'text-gray-800'}`}>
+                                                  {formattedValue}
+                                                </span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">{formatCurrency(item.total)}</p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   <Separator className="bg-gray-200" />
 

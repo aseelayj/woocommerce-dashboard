@@ -1,9 +1,11 @@
 import { useRef, useEffect, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Order } from '@/types';
-import { Badge } from '@/components/ui/badge';
+import { Order, Shop } from '@/types';
+import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Package } from 'lucide-react';
+import { OrderStatusBadge } from './OrderStatusBadge';
+import { formatStoreCurrency } from '@/lib/currency';
 
 interface InfiniteScrollOrdersTableProps {
   orders: (Order & { shopName?: string; shopId?: string })[];
@@ -12,6 +14,9 @@ interface InfiniteScrollOrdersTableProps {
   hasMore: boolean;
   loading: boolean;
   showStoreColumn?: boolean;
+  shop?: Shop | null;
+  shops?: Shop[];
+  onDownloadInvoice?: (order: Order & { shopName?: string; shopId?: string }) => void;
 }
 
 export function InfiniteScrollOrdersTable({
@@ -21,6 +26,9 @@ export function InfiniteScrollOrdersTable({
   hasMore,
   loading,
   showStoreColumn = false,
+  shop,
+  shops,
+  onDownloadInvoice,
 }: InfiniteScrollOrdersTableProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -49,48 +57,35 @@ export function InfiniteScrollOrdersTable({
     }
   }, [lastItem, orders.length, hasMore, isLoadingMore, loading, loadMore]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'processing':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'pending':
-        return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'on-hold':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'refunded':
-        return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'failed':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
 
-  const formatCurrency = (amount: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(parseFloat(amount));
+  const formatCurrency = (amount: string, order?: Order & { shopName?: string; shopId?: string }) => {
+    // If we have shops array and the order has a shopId, find the correct shop
+    if (shops && order?.shopId) {
+      const orderShop = shops.find(s => s.id === order.shopId);
+      if (orderShop) {
+        return formatStoreCurrency(amount, orderShop);
+      }
+    }
+    // Fallback to the provided shop or default formatting
+    return formatStoreCurrency(amount, shop);
   };
 
   return (
-    <div className="rounded-lg border overflow-hidden bg-white">
+    <div className="rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full table-fixed">
           <thead>
-            <tr className="bg-gray-50 border-b">
-              <th className="text-left p-4 font-medium text-gray-900">Order</th>
-              <th className="text-left p-4 font-medium text-gray-900">Date</th>
-              <th className="text-left p-4 font-medium text-gray-900">Customer</th>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-32">Order</th>
+              <th className="text-left px-4 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-16"></th>
+              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-36">Date</th>
+              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-64">Customer</th>
               {showStoreColumn && (
-                <th className="text-left p-4 font-medium text-gray-900">Store</th>
+                <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-36">Store</th>
               )}
-              <th className="text-left p-4 font-medium text-gray-900">Status</th>
-              <th className="text-right p-4 font-medium text-gray-900">Total</th>
+              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-36">Status</th>
+              <th className="text-right px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-32">Total</th>
+              <th className="text-center px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-20">Actions</th>
             </tr>
           </thead>
         </table>
@@ -143,42 +138,90 @@ export function InfiniteScrollOrdersTable({
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                 >
-                  <table className="w-full">
+                  <table className="w-full table-fixed">
                     <tbody>
                       <tr
-                        className="border-b hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => onOrderSelect(order)}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                       >
-                        <td className="p-4">
+                        <td className="px-6 py-4 w-32 cursor-pointer" onClick={() => onOrderSelect(order)}>
                           <div className="font-medium text-gray-900">#{order.number}</div>
-                          <div className="text-sm text-gray-500">{order.line_items.length} items</div>
+                          <div className="text-xs text-gray-500">{order.line_items.length} items</div>
                         </td>
-                        <td className="p-4 text-gray-900">
-                          {format(new Date(order.date_created), 'MMM dd, yyyy')}
-                          <div className="text-sm text-gray-500">
-                            {format(new Date(order.date_created), 'HH:mm')}
+                        <td className="px-4 py-4 w-16 cursor-pointer" onClick={() => onOrderSelect(order)}>
+                          {(() => {
+                            // Get first product image
+                            const firstItem = order.line_items[0];
+                            let imageUrl = null;
+                            
+                            if (firstItem?.image) {
+                              if (typeof firstItem.image === 'string') {
+                                imageUrl = firstItem.image;
+                              } else if (firstItem.image.src) {
+                                imageUrl = firstItem.image.src;
+                              }
+                            }
+                            
+                            return imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt={firstItem.name}
+                                className="w-10 h-10 object-cover rounded border border-gray-200"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const fallback = e.currentTarget.nextElementSibling;
+                                  if (fallback) fallback.classList.remove('hidden');
+                                }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
+                                <Package className="h-5 w-5 text-gray-400" />
+                              </div>
+                            );
+                          })()}
+                          <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center hidden">
+                            <Package className="h-5 w-5 text-gray-400" />
                           </div>
                         </td>
-                        <td className="p-4">
-                          <div className="font-medium text-gray-900">
+                        <td className="px-6 py-4 w-36 cursor-pointer" onClick={() => onOrderSelect(order)}>
+                          <div className="text-sm text-gray-900">{format(new Date(order.date_created), 'MMM dd, yyyy')}</div>
+                          <div className="text-xs text-gray-500">{format(new Date(order.date_created), 'HH:mm')}</div>
+                        </td>
+                        <td className="px-6 py-4 w-64">
+                          <div className="font-medium text-gray-900 cursor-pointer truncate pr-2" onClick={() => onOrderSelect(order)}>
                             {order.customer.first_name} {order.customer.last_name}
                           </div>
-                          <div className="text-sm text-gray-500">{order.customer.email}</div>
+                          <div className="text-xs text-gray-500 hover:text-gray-700 cursor-text select-text truncate pr-2" onClick={(e) => e.stopPropagation()}>
+                            {order.customer.email}
+                          </div>
                         </td>
                         {showStoreColumn && (
-                          <td className="p-4">
-                            <div className="text-sm font-medium text-gray-900">
+                          <td className="px-6 py-4 w-36">
+                            <div className="text-sm font-medium text-gray-700 truncate">
                               {order.shopName || 'Unknown'}
                             </div>
                           </td>
                         )}
-                        <td className="p-4">
-                          <Badge className={getStatusColor(order.status)}>
-                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                          </Badge>
+                        <td className="px-6 py-4 w-36 cursor-pointer" onClick={() => onOrderSelect(order)}>
+                          <OrderStatusBadge status={order.status} />
                         </td>
-                        <td className="p-4 text-right font-semibold text-gray-900">
-                          {formatCurrency(order.total)}
+                        <td className="px-6 py-4 w-32 text-right cursor-pointer" onClick={() => onOrderSelect(order)}>
+                          <div className="font-semibold text-gray-900">{formatCurrency(order.total, order)}</div>
+                        </td>
+                        <td className="px-6 py-4 w-20 text-center">
+                          {onDownloadInvoice && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDownloadInvoice(order);
+                              }}
+                              className="h-8 px-2 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-medium"
+                              title="Download Invoice"
+                            >
+                              PDF
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     </tbody>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Header } from '@/components/dashboard/Header';
 import { HeaderWithAuth } from '@/components/dashboard/HeaderWithAuth';
@@ -16,6 +16,7 @@ import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useOrderNotifications, useNotificationSettings } from '@/hooks/useOrderNotifications';
+import { downloadInvoicePDF } from '@/components/orders/InvoicePDF';
 
 type ActiveView = 'dashboard' | 'orders' | 'settings';
 
@@ -234,6 +235,55 @@ function App() {
     }
   };
 
+  const handleDownloadInvoice = async (order: Order & { shopName?: string; shopId?: string }) => {
+    try {
+      // Check if order has invoice URL in meta_data
+      const invoiceMetaData = order.meta_data?.find(meta => 
+        meta.key === '_wcpdf_invoice_url' || 
+        meta.key === 'invoice_url' ||
+        meta.key === '_invoice_url'
+      );
+      
+      if (invoiceMetaData?.value) {
+        // Use original invoice URL
+        toast.info('Downloading invoice from store...');
+        window.open(invoiceMetaData.value, '_blank');
+        toast.success(`Invoice for order #${order.number} opened in new tab`);
+        return;
+      }
+      
+      // Check _links for invoice endpoint
+      if (order._links) {
+        const invoiceLink = order._links['invoice'] || order._links['wp:invoice'];
+        if (invoiceLink?.[0]?.href) {
+          toast.info('Downloading invoice from store...');
+          window.open(invoiceLink[0].href, '_blank');
+          toast.success(`Invoice for order #${order.number} opened in new tab`);
+          return;
+        }
+      }
+      
+      // Fallback to generating PDF locally
+      toast.info('Generating invoice...');
+      
+      // Find the shop for this order
+      let orderShop = activeShop;
+      if (order.shopId && viewAllStores) {
+        orderShop = shops.find(s => s.id === order.shopId) || null;
+      }
+      
+      if (orderShop) {
+        await downloadInvoicePDF(order, orderShop);
+        toast.success(`Invoice for order #${order.number} downloaded successfully`);
+      } else {
+        toast.error('Shop not found for this order');
+      }
+    } catch (error) {
+      console.error('Error handling invoice:', error);
+      toast.error('Failed to download invoice');
+    }
+  };
+
   const renderMainContent = () => {
     if (!activeShop && !viewAllStores) {
       return (
@@ -275,6 +325,7 @@ function App() {
                 const { shopName, shopId, ...orderWithoutShop } = order;
                 setSelectedOrder(orderWithoutShop);
               }}
+              onDownloadInvoice={handleDownloadInvoice}
             />
           );
         }
@@ -301,6 +352,8 @@ function App() {
             }}
             filters={filters}
             pagination={pagination}
+            shop={activeShop}
+            onDownloadInvoice={handleDownloadInvoice}
           />
         );
       case 'settings':
@@ -384,6 +437,10 @@ function App() {
               onRefresh={handleRefresh}
               isLoading={loading}
               isPollingOrders={isPolling && notificationSettings.enabled}
+              onSearch={(term) => {
+                setFilters(prev => ({ ...prev, search: term }));
+                setPagination(prev => ({ ...prev, page: 1 }));
+              }}
             />
           ) : (
             <Header

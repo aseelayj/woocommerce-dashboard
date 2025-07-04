@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import { 
   Store, 
   ShoppingCart, 
@@ -10,7 +12,8 @@ import {
   Settings, 
   BarChart3,
   Edit,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { Shop } from '@/types';
 import { usePrefetchStoreStats } from '@/hooks/useStoreStats';
@@ -45,9 +48,17 @@ export function Sidebar({
   onClose,
   className 
 }: SidebarProps) {
+  const [searchTerm, setSearchTerm] = useState('');
   const prefetchStoreStats = usePrefetchStoreStats();
   const prefetchOrders = usePrefetchOrders();
   
+  // Filter shops based on search term
+  const filteredShops = shops.filter(shop => {
+    const searchLower = searchTerm.toLowerCase();
+    return shop.name.toLowerCase().includes(searchLower) || 
+           new URL(shop.baseUrl).hostname.toLowerCase().includes(searchLower);
+  });
+
   // Prefetch data when hovering over a store
   const handleStoreHover = (shop: Shop) => {
     if (shop.isActive) {
@@ -159,37 +170,13 @@ export function Sidebar({
         ) : null}
       </div>
 
-      {/* Navigation */}
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
-        <nav className="flex-1 p-4">
-          <div className="space-y-2">
-            {menuItems.map((item) => (
-              <Button
-                key={item.id}
-                variant={activeView === item.id ? 'default' : 'ghost'}
-                className={cn(
-                  'w-full justify-start gap-3 h-10 md:h-11',
-                  activeView === item.id
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                )}
-                size="sm"
-                onClick={() => onViewChange(item.id)}
-              >
-                <item.icon className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="font-medium text-sm md:text-base">{item.label}</span>
-              </Button>
-            ))}
-          </div>
-        </nav>
-
-        <Separator className="bg-gray-100" />
-
-        {/* Shops Section */}
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
+        {/* Shops Section - Moved to top */}
+        <div className="flex-1 flex flex-col p-4 overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-xs md:text-sm text-gray-900 uppercase tracking-wide">
-              Connected Shops
+              Connected Shops ({shops.length})
             </h3>
             <Button 
               size="sm" 
@@ -201,10 +188,24 @@ export function Sidebar({
             </Button>
           </div>
           
-          <ScrollArea className="max-h-48 md:max-h-64">
-            <div className="space-y-2">
+          {/* Search Input - Show when there are 5+ shops */}
+          {shops.length >= 5 && (
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
+              <Input
+                type="search"
+                placeholder="Search shops..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 h-8 text-sm bg-gray-50 border-gray-200 focus:bg-white"
+              />
+            </div>
+          )}
+          
+          <ScrollArea className="flex-1">
+            <div className="space-y-2 pr-2">
               {/* All Stores Option */}
-              {shops.filter(s => s.isActive).length > 1 && (
+              {filteredShops.filter(s => s.isActive).length > 1 && (
                 <>
                   <Button
                     variant={viewAllStores ? 'secondary' : 'ghost'}
@@ -231,7 +232,7 @@ export function Sidebar({
               )}
               
               {/* Individual Stores */}
-              {shops.map((shop) => (
+              {filteredShops.map((shop) => (
                 <Button
                   key={shop.id}
                   variant={!viewAllStores && activeShop?.id === shop.id ? 'secondary' : 'ghost'}
@@ -259,6 +260,14 @@ export function Sidebar({
                 </Button>
               ))}
               
+              {/* No results message */}
+              {searchTerm && filteredShops.length === 0 && (
+                <div className="text-center py-4">
+                  <p className="text-xs text-gray-500">No shops found matching "{searchTerm}"</p>
+                </div>
+              )}
+              
+              {/* Empty state */}
               {shops.length === 0 && (
                 <div className="text-center py-4 md:py-6">
                   <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -277,6 +286,31 @@ export function Sidebar({
             </div>
           </ScrollArea>
         </div>
+
+        <Separator className="bg-gray-100" />
+
+        {/* Navigation Menu - Moved to bottom */}
+        <nav className="p-4">
+          <div className="space-y-2">
+            {menuItems.map((item) => (
+              <Button
+                key={item.id}
+                variant={activeView === item.id ? 'default' : 'ghost'}
+                className={cn(
+                  'w-full justify-start gap-3 h-10 md:h-11',
+                  activeView === item.id
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                )}
+                size="sm"
+                onClick={() => onViewChange(item.id)}
+              >
+                <item.icon className="w-4 h-4 md:w-5 md:h-5" />
+                <span className="font-medium text-sm md:text-base">{item.label}</span>
+              </Button>
+            ))}
+          </div>
+        </nav>
       </div>
     </div>
   );

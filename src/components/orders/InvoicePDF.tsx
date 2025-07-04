@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Order, Shop } from '@/types';
 import { format } from 'date-fns';
+import { getStoreCurrency } from '@/lib/currency';
 
 interface InvoicePDFProps {
   order: Order;
@@ -19,9 +20,12 @@ export async function generateInvoicePDF({ order, shop }: InvoicePDFProps): Prom
   tempDiv.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   
   const formatCurrency = (amount: string) => {
-    return new Intl.NumberFormat('en-US', {
+    const currency = getStoreCurrency(shop);
+    const locale = currency === 'EUR' ? 'de-DE' : 'en-US';
+    
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency: shop?.storeInfo?.currency || order.currency || 'USD',
+      currency: currency,
     }).format(parseFloat(amount));
   };
 

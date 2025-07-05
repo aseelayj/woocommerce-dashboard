@@ -40,7 +40,7 @@ import { Order, OrderStatus, Shop } from '@/types';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { downloadInvoice } from './InvoiceGenerator';
-import { downloadInvoicePDF, printInvoicePDF } from './InvoicePDF';
+import { downloadInvoicePDF, printInvoicePDF } from './InvoiceHTML';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
 import { useUpdateOrderStatus } from '@/hooks/useOrders';
 import { getStoreCurrency } from '@/lib/currency';
@@ -88,6 +88,24 @@ export function OrderDetailsDrawer({
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard');
   };
+  
+  // Check if order has invoice URL in meta_data
+  const getInvoiceUrl = (): string | null => {
+    if (!order.meta_data) return null;
+    
+    // Look for common invoice meta keys
+    const invoiceKeys = ['_wcpdf_document_link', '_invoice_url', 'invoice_link', '_pdf_invoice_url'];
+    
+    for (const meta of order.meta_data) {
+      if (invoiceKeys.includes(meta.key) && meta.value) {
+        return String(meta.value);
+      }
+    }
+    
+    return null;
+  };
+  
+  const invoiceUrl = getInvoiceUrl();
 
   const handleStatusUpdate = async () => {
     if (newStatus && shop) {
@@ -455,25 +473,18 @@ export function OrderDetailsDrawer({
                                 <div className="overflow-x-auto">
                                   <table className="w-full">
                                     <tbody>
-                                      {/* Sort fields: regular fields first, then technical fields */}
+                                      {/* Filter out technical fields and sort remaining fields */}
                                       {[...item.meta_data]
-                                        .sort((a, b) => {
-                                          const aIsTechnical = a.key.startsWith('_');
-                                          const bIsTechnical = b.key.startsWith('_');
-                                          if (aIsTechnical && !bIsTechnical) return 1;
-                                          if (!aIsTechnical && bIsTechnical) return -1;
-                                          return 0;
-                                        })
+                                        .filter(meta => !meta.key.startsWith('_'))
                                         .map((meta, index) => {
-                                        const isTechnical = meta.key.startsWith('_');
-                                        const formattedKey = isTechnical ? meta.key : formatMetaKey(meta.key);
+                                        const formattedKey = formatMetaKey(meta.key);
                                         const formattedValue = formatMetaValue(meta.key, meta.value);
                                         const isUrl = typeof formattedValue === 'string' && 
                                                      (formattedValue.startsWith('http://') || formattedValue.startsWith('https://'));
                                         
                                         return (
                                           <tr key={meta.id} className={`${index !== 0 ? 'border-t border-gray-200' : ''}`}>
-                                            <td className={`py-3 pr-6 text-sm align-top ${isTechnical ? 'font-mono text-gray-500' : 'font-medium text-gray-700'}`} style={{ width: '40%' }}>
+                                            <td className="py-3 pr-6 text-sm align-top font-medium text-gray-700" style={{ width: '40%' }}>
                                               {formattedKey}
                                             </td>
                                             <td className="py-3 text-sm">
@@ -487,7 +498,7 @@ export function OrderDetailsDrawer({
                                                   {formattedValue}
                                                 </a>
                                               ) : (
-                                                <span className={`break-words ${isTechnical ? 'font-mono text-gray-500' : 'text-gray-800'}`}>
+                                                <span className="break-words text-gray-800">
                                                   {formattedValue}
                                                 </span>
                                               )}
@@ -721,22 +732,44 @@ export function OrderDetailsDrawer({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {invoiceUrl ? (
+                    <>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <p className="text-sm text-green-800 font-medium mb-2">WooCommerce Invoice Available</p>
+                        <Button
+                          onClick={() => window.open(invoiceUrl, '_blank')}
+                          className="gap-2 bg-green-600 hover:bg-green-700 w-full"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download WooCommerce Invoice
+                        </Button>
+                      </div>
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                          <div className="w-full border-t border-gray-300" />
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="bg-white px-2 text-gray-500">or generate a new one</span>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button className="gap-2 bg-blue-600 hover:bg-blue-700 w-full">
+                        <Button className={`gap-2 ${invoiceUrl ? 'bg-gray-600 hover:bg-gray-700' : 'bg-blue-600 hover:bg-blue-700'} w-full`}>
                           <Download className="h-4 w-4" />
-                          Download Invoice
+                          {invoiceUrl ? 'Generate New Invoice' : 'Download Invoice'}
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start">
                         <DropdownMenuItem onClick={() => handleDownloadInvoice('pdf')}>
                           <FileText className="h-4 w-4 mr-2" />
-                          Download as PDF
+                          Generate as PDF
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleDownloadInvoice('html')}>
                           <FileText className="h-4 w-4 mr-2" />
-                          Download as HTML
+                          Generate as HTML
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -750,7 +783,9 @@ export function OrderDetailsDrawer({
                     </Button>
                   </div>
                   <p className="text-xs text-gray-500">
-                    Invoice will include all order details, customer information, and payment summary.
+                    {invoiceUrl 
+                      ? 'You can download the original WooCommerce invoice or generate a new one with current data.'
+                      : 'Invoice will include all order details, customer information, and payment summary.'}
                   </p>
                 </CardContent>
               </Card>

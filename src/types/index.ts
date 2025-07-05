@@ -6,6 +6,7 @@ export interface Shop {
   consumerSecret: string;
   isActive: boolean;
   createdAt: string;
+  logoUrl?: string; // Store logo URL
   // Store info from WooCommerce (optional, fetched separately)
   storeInfo?: {
     store_name?: string;
@@ -85,6 +86,8 @@ export interface Order {
   currency: string;
   date_created: string;
   date_modified: string;
+  date_paid?: string;
+  date_completed?: string;
   discount_total: string;
   discount_tax: string;
   shipping_total: string;
@@ -110,6 +113,8 @@ export interface Order {
     id: number;
     key: string;
     value: any;
+    display_key?: string;
+    display_value?: string;
   }>;
   _links?: {
     self?: Array<{ href: string }>;
@@ -117,6 +122,7 @@ export interface Order {
     customer?: Array<{ href: string }>;
     [key: string]: Array<{ href: string }> | undefined;
   };
+  invoice_url?: string;
 }
 
 export interface OrdersResponse {

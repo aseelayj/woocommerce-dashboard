@@ -23,6 +23,30 @@ const DEFAULT_SETTINGS: NotificationSettings = {
 // Store the last seen order IDs per shop
 const lastSeenOrders = new Map<string, Set<number>>();
 
+// Load last seen orders from localStorage on initialization
+if (typeof window !== 'undefined') {
+  const stored = localStorage.getItem('lastSeenOrders');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      Object.entries(parsed).forEach(([shopId, orderIds]) => {
+        lastSeenOrders.set(shopId, new Set(orderIds as number[]));
+      });
+    } catch (e) {
+      console.error('Failed to parse lastSeenOrders from localStorage:', e);
+    }
+  }
+}
+
+// Helper function to persist lastSeenOrders to localStorage
+const persistLastSeenOrders = () => {
+  const toStore: Record<string, number[]> = {};
+  lastSeenOrders.forEach((orderIds, shopId) => {
+    toStore[shopId] = Array.from(orderIds);
+  });
+  localStorage.setItem('lastSeenOrders', JSON.stringify(toStore));
+};
+
 export function useOrderNotifications(
   shops: Shop[],
   settings: Partial<NotificationSettings> = {}
@@ -111,6 +135,7 @@ export function useOrderNotifications(
           const orderIds = new Set(orders.map(order => order.id));
           lastSeenOrders.set(shop.id, orderIds);
         });
+        persistLastSeenOrders(); // Persist initial state
         setIsFirstLoad(false);
       }
       return;
@@ -132,6 +157,7 @@ export function useOrderNotifications(
       // Update last seen orders
       if (newOrders.length > 0) {
         lastSeenOrders.set(shop.id, currentOrderIds);
+        persistLastSeenOrders(); // Persist to localStorage
         
         // Play sound once for all new orders
         if (config.soundEnabled && notificationSound.current) {
@@ -209,6 +235,7 @@ export function useOrderNotifications(
 
   const clearNotificationHistory = () => {
     lastSeenOrders.clear();
+    localStorage.removeItem('lastSeenOrders');
     setIsFirstLoad(true);
   };
 

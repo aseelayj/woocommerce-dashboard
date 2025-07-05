@@ -1,339 +1,423 @@
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, pdf, Image } from '@react-pdf/renderer';
 import { Order, Shop } from '@/types';
 import { format } from 'date-fns';
-import { getStoreCurrency } from '@/lib/currency';
+import { de } from 'date-fns/locale';
+import { getStoreLogoBase64 } from '@/config/store-logos-base64';
 
-interface InvoicePDFProps {
-  order: Order;
-  shop?: Shop;
-}
+// Create styles
+const styles = StyleSheet.create({
+  page: {
+    backgroundColor: '#ffffff',
+    padding: 30,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+    alignItems: 'flex-start',
+  },
+  companyInfo: {
+    fontSize: 8,
+    lineHeight: 1.3,
+  },
+  logoContainer: {
+    width: 180,
+  },
+  logo: {
+    width: 180,
+    height: 60,
+    objectFit: 'contain',
+  },
+  logoText: {
+    fontSize: 18,
+    color: '#999999',
+    letterSpacing: -0.5,
+    textAlign: 'right',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 20,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    marginBottom: 10,
+  },
+  infoSection: {
+    marginBottom: 20,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    marginBottom: 3,
+  },
+  infoLabel: {
+    fontSize: 8,
+    width: 120,
+  },
+  infoValue: {
+    fontSize: 8,
+    flex: 1,
+  },
+  addressText: {
+    fontSize: 9,
+    marginBottom: 2,
+  },
+  table: {
+    marginTop: 30,
+    marginBottom: 30,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+    paddingBottom: 5,
+    marginBottom: 5,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  tableCol1: {
+    width: '10%',
+    fontSize: 8,
+  },
+  tableCol2: {
+    width: '50%',
+    fontSize: 8,
+  },
+  tableCol3: {
+    width: '15%',
+    fontSize: 8,
+    textAlign: 'right',
+  },
+  tableCol4: {
+    width: '25%',
+    fontSize: 8,
+    textAlign: 'right',
+  },
+  totalSection: {
+    marginTop: 20,
+    paddingTop: 10,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 5,
+  },
+  totalLabel: {
+    fontSize: 8,
+    width: 120,
+    textAlign: 'right',
+    marginRight: 20,
+  },
+  totalValue: {
+    fontSize: 8,
+    width: 80,
+    textAlign: 'right',
+  },
+  grandTotal: {
+    borderTopWidth: 2,
+    borderTopColor: '#000',
+    paddingTop: 10,
+    marginTop: 10,
+  },
+  vatNote: {
+    fontSize: 8,
+    marginTop: 30,
+    color: '#666',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 30,
+    right: 30,
+    fontSize: 7,
+    color: '#666',
+    textAlign: 'center',
+  }
+});
 
-export async function generateInvoicePDF({ order, shop }: InvoicePDFProps): Promise<Blob> {
-  // Create a temporary div to render the invoice
-  const tempDiv = document.createElement('div');
-  tempDiv.style.position = 'absolute';
-  tempDiv.style.left = '-9999px';
-  tempDiv.style.width = '210mm'; // A4 width
-  tempDiv.style.padding = '20mm';
-  tempDiv.style.backgroundColor = 'white';
-  tempDiv.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+// Company data based on shop
+const getCompanyData = (shop: Shop | null) => {
+  const domain = shop?.baseUrl ? new URL(shop.baseUrl).hostname : '';
   
-  const formatCurrency = (amount: string) => {
-    const currency = getStoreCurrency(shop);
-    const locale = currency === 'EUR' ? 'de-DE' : 'en-US';
-    
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currency,
-    }).format(parseFloat(amount));
+  // Default company data
+  let companyData = {
+    name: 'Online Store',
+    address: '',
+    zipCity: '',
+    country: '',
+    ceo: '',
+    iban: '',
+    bic: '',
+    ustId: '',
+    email: `support@${domain}`,
+    website: domain,
   };
 
+  // Customize based on shop
+  if (shop?.name?.toLowerCase().includes('social') || domain.includes('socialmediadaily')) {
+    companyData = {
+      name: 'Sentrox GmbH',
+      address: 'Werner-Otto-Straße 26',
+      zipCity: '22179 Hamburg',
+      country: 'Deutschland',
+      ceo: 'Mikel-Santino Fandrei',
+      iban: 'DE54 2135 2240 0179 2541 15',
+      bic: 'NOLADE21HOL',
+      ustId: 'DE345839413',
+      email: 'support@socialmediadaily.de',
+      website: 'socialmediadaily.de',
+    };
+  } else if (shop?.name?.toLowerCase().includes('follower') || domain.includes('followerfast')) {
+    companyData = {
+      name: 'FollowerFast GmbH',
+      address: 'Hauptstraße 1',
+      zipCity: '10115 Berlin',
+      country: 'Deutschland',
+      ceo: 'Max Mustermann',
+      iban: 'DE12 3456 7890 1234 5678 90',
+      bic: 'DEUTDEFF',
+      ustId: 'DE123456789',
+      email: 'support@followerfast.com',
+      website: 'followerfast.com',
+    };
+  }
+
+  return companyData;
+};
+
+// Get invoice number
+const getInvoiceNumber = (order: Order, shop: Shop | null) => {
+  const prefix = shop?.name?.substring(0, 3).toUpperCase() || 'INV';
+  return `${prefix}-${order.number}`;
+};
+
+// Format currency
+const formatCurrency = (amount: string | number, currency: string = 'EUR') => {
+  const value = typeof amount === 'string' ? parseFloat(amount) : amount;
+  return new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
+// Invoice Document Component
+const InvoiceDocument = ({ order, shop }: { order: Order; shop: Shop | null }) => {
+  const company = getCompanyData(shop);
+  const invoiceNumber = getInvoiceNumber(order, shop);
+  const invoiceDate = new Date();
+  
+  // Calculate totals
   const subtotal = order.line_items.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
+  const shipping = parseFloat(order.shipping_total || '0');
+  const discount = parseFloat(order.discount_total || '0');
+  const tax = parseFloat(order.total_tax || '0');
+  const total = parseFloat(order.total);
+
+  // Determine VAT status
+  const isVatFree = order.billing.country !== 'DE' && order.total_tax === '0';
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.companyInfo}>
+            <Text>{company.name}</Text>
+            <Text>{company.address}</Text>
+            <Text>{company.zipCity}</Text>
+          </View>
+          <View style={styles.logoContainer}>
+            {/* Always use text logo for reliability */}
+            <Text style={[styles.logoText, { color: shop?.name?.toLowerCase().includes('follower') ? '#ff6900' : '#1a73e8' }]}>
+              {shop?.name?.toUpperCase() || 'ONLINE STORE'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Billing Address */}
+        <View style={styles.infoSection}>
+          <Text style={styles.addressText}>{order.billing.company || `${order.billing.first_name} ${order.billing.last_name}`}</Text>
+          <Text style={styles.addressText}>{order.billing.address_1}</Text>
+          {order.billing.address_2 && <Text style={styles.addressText}>{order.billing.address_2}</Text>}
+          <Text style={styles.addressText}>{`${order.billing.postcode} ${order.billing.city}`}</Text>
+          <Text style={styles.addressText}>{order.billing.country}</Text>
+        </View>
+
+        {/* Company Details */}
+        <View style={styles.infoSection}>
+          <Text style={styles.sectionTitle}>{company.name}</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Geschäftsführung:</Text>
+            <Text style={styles.infoValue}>{company.ceo}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>IBAN:</Text>
+            <Text style={styles.infoValue}>{company.iban}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>BIC:</Text>
+            <Text style={styles.infoValue}>{company.bic}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Rechnungsdatum:</Text>
+            <Text style={styles.infoValue}>{format(invoiceDate, 'dd.MM.yyyy', { locale: de })}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>USt-IdNr:</Text>
+            <Text style={styles.infoValue}>{company.ustId}</Text>
+          </View>
+        </View>
+
+        {/* Invoice Title */}
+        <View style={styles.infoSection}>
+          <Text style={styles.sectionTitle}>{shop?.name || 'Online Store'}</Text>
+          <Text style={{ fontSize: 8 }}>Rechnungsnummer: {invoiceNumber}</Text>
+          <Text style={{ fontSize: 8 }}>{format(invoiceDate, 'dd. MMMM yyyy', { locale: de })}</Text>
+        </View>
+
+        {/* Items Table */}
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <Text style={styles.tableCol1}>Art.-Nr.</Text>
+            <Text style={styles.tableCol2}>Produkt</Text>
+            <Text style={styles.tableCol3}>Anzahl</Text>
+            <Text style={styles.tableCol4}>Preis</Text>
+          </View>
+
+          {order.line_items.map((item, index) => (
+            <View key={index} style={styles.tableRow}>
+              <Text style={styles.tableCol1}>{item.sku || '-'}</Text>
+              <View style={styles.tableCol2}>
+                <Text>{item.name}</Text>
+                {item.meta_data && item.meta_data.length > 0 && (
+                  <Text style={{ fontSize: 7, color: '#666' }}>
+                    {item.meta_data
+                      .filter(meta => !meta.key.startsWith('_'))
+                      .map(meta => `${meta.display_key || meta.key}: ${meta.display_value || meta.value}`)
+                      .join(', ')}
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.tableCol3}>{item.quantity}</Text>
+              <Text style={styles.tableCol4}>{formatCurrency(item.subtotal, order.currency)}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Totals */}
+        <View style={styles.totalSection}>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Zwischensumme:</Text>
+            <Text style={styles.totalValue}>{formatCurrency(subtotal, order.currency)}</Text>
+          </View>
+
+          {discount > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Rabatt:</Text>
+              <Text style={styles.totalValue}>-{formatCurrency(discount, order.currency)}</Text>
+            </View>
+          )}
+
+          {shipping > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Versand:</Text>
+              <Text style={styles.totalValue}>{formatCurrency(shipping, order.currency)}</Text>
+            </View>
+          )}
+
+          {tax > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>MwSt. (19%):</Text>
+              <Text style={styles.totalValue}>{formatCurrency(tax, order.currency)}</Text>
+            </View>
+          )}
+
+          <View style={[styles.totalRow, styles.grandTotal]}>
+            <Text style={[styles.totalLabel, { fontSize: 10 }]}>Gesamt:</Text>
+            <Text style={[styles.totalValue, { fontSize: 10 }]}>{formatCurrency(total, order.currency)}</Text>
+          </View>
+        </View>
+
+        {/* VAT Note */}
+        <Text style={styles.vatNote}>
+          {isVatFree 
+            ? 'Umsatzsteuerfreie Ausfuhrlieferung'
+            : 'Alle Preise verstehen sich inklusive der gesetzlichen Mehrwertsteuer.'
+          }
+        </Text>
+
+        {/* Payment Info */}
+        <View style={{ marginTop: 20 }}>
+          <Text style={{ fontSize: 8 }}>
+            Zahlungsart: {order.payment_method_title}
+          </Text>
+          {order.status === 'completed' && (
+            <Text style={{ fontSize: 8, marginTop: 5 }}>
+              Bezahlt am: {format(new Date(order.date_paid || order.date_created), 'dd.MM.yyyy', { locale: de })}
+            </Text>
+          )}
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text>{company.name} • {company.address} • {company.zipCity}</Text>
+          <Text>{company.website} • {company.email}</Text>
+        </View>
+      </Page>
+    </Document>
+  );
+};
+
+// Export function to download PDF
+export const downloadInvoicePDF = async (order: Order, shop: Shop | null) => {
+  const invoiceNumber = getInvoiceNumber(order, shop);
+  const fileName = `Rechnung-${invoiceNumber}.pdf`;
   
-  // Calculate total discount including coupon lines
-  const discountFromItems = order.line_items.reduce((sum, item) => {
-    return sum + (parseFloat(item.subtotal) - parseFloat(item.total));
-  }, 0);
+  const blob = await pdf(<InvoiceDocument order={order} shop={shop} />).toBlob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+// Export function to print PDF
+export const printInvoicePDF = async (order: Order, shop: Shop | null) => {
+  const blob = await pdf(<InvoiceDocument order={order} shop={shop} />).toBlob();
+  const url = URL.createObjectURL(blob);
   
-  const couponDiscount = order.coupon_lines?.reduce((sum, coupon: any) => {
-    return sum + Math.abs(parseFloat(coupon.discount || '0'));
-  }, 0) || 0;
+  const printWindow = window.open(url, '_blank');
+  if (printWindow) {
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  }
   
-  const totalDiscount = parseFloat(order.discount_total) || (discountFromItems + couponDiscount);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+};
 
-  tempDiv.innerHTML = `
-    <div style="color: #333; line-height: 1.6;">
-      <!-- Header -->
-      <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 50px; padding-bottom: 30px; border-bottom: 2px solid #e5e7eb;">
-        <div style="max-width: 60%;">
-          ${shop?.storeInfo?.store_name || shop?.name ? `
-            <h1 style="margin: 0 0 20px 0; color: #1e40af; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">
-              ${shop.storeInfo?.store_name || shop.name}
-            </h1>
-          ` : ''}
-          
-          <div style="color: #6b7280; font-size: 14px; line-height: 1.8;">
-            ${shop?.storeInfo?.store_address ? `
-              <div style="margin-bottom: 8px;">
-                <div>${shop.storeInfo.store_address}</div>
-                <div>
-                  ${shop.storeInfo.store_city ? `${shop.storeInfo.store_city}` : ''}${shop.storeInfo.store_postcode ? `, ${shop.storeInfo.store_postcode}` : ''}
-                </div>
-                ${shop.storeInfo.store_country ? `<div>${shop.storeInfo.store_country}</div>` : ''}
-              </div>
-            ` : ''}
-            
-            <div style="margin-top: 12px;">
-              ${shop?.baseUrl ? `
-                <div style="margin-bottom: 4px;">
-                  <span style="font-weight: 600; color: #374151;">Website:</span> 
-                  <span style="color: #1e40af;">${new URL(shop.baseUrl).hostname}</span>
-                </div>
-              ` : ''}
-              
-              ${shop?.storeInfo?.store_email || shop ? `
-                <div>
-                  <span style="font-weight: 600; color: #374151;">Email:</span> 
-                  <span style="color: #1e40af;">${shop.storeInfo?.store_email || `support@${new URL(shop.baseUrl).hostname}`}</span>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-          
-          ${!shop || (!shop.name && !shop.storeInfo?.store_name) ? `
-            <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin-bottom: 20px;">
-              <p style="color: #6b7280; font-style: italic; margin: 0;">Store information not available</p>
-            </div>
-          ` : ''}
-        </div>
-        
-        <div style="text-align: right; min-width: 250px;">
-          <h2 style="margin: 0 0 24px 0; color: #111827; font-size: 36px; font-weight: 700; letter-spacing: -0.5px;">INVOICE</h2>
-          
-          <div style="font-size: 14px;">
-            <div style="margin-bottom: 16px;">
-              <div style="color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Invoice Number</div>
-              <div style="font-weight: 700; color: #111827; font-size: 20px;">#${order.number}</div>
-            </div>
-            
-            <div style="margin-bottom: 16px;">
-              <div style="color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Date Issued</div>
-              <div style="font-weight: 600; color: #374151; font-size: 16px;">${format(new Date(order.date_created), 'MMM dd, yyyy')}</div>
-            </div>
-            
-            <div>
-              <div style="color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Status</div>
-              <div style="font-size: 16px; font-weight: 700; text-transform: uppercase;
-                ${order.status === 'completed' ? 'color: #065f46;' : ''}
-                ${order.status === 'processing' ? 'color: #1e3a8a;' : ''}
-                ${order.status === 'pending' ? 'color: #92400e;' : ''}
-                ${order.status === 'cancelled' ? 'color: #991b1b;' : ''}
-                ${order.status === 'refunded' ? 'color: #6b21a8;' : ''}
-                ${order.status === 'failed' ? 'color: #991b1b;' : ''}
-              ">
-                ${order.status}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Addresses -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 40px;">
-        <div style="background: #f9fafb; padding: 24px; border-radius: 8px;">
-          <h3 style="margin: 0 0 16px 0; color: #1e40af; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Billing Information</h3>
-          <div style="color: #374151; font-size: 14px; line-height: 1.6;">
-            <div style="font-weight: 600; color: #111827; font-size: 16px; margin-bottom: 8px;">
-              ${order.billing.first_name} ${order.billing.last_name}
-            </div>
-            ${order.billing.company ? `<div style="margin-bottom: 4px; color: #6b7280;">${order.billing.company}</div>` : ''}
-            <div style="margin-bottom: 12px;">
-              <div>${order.billing.address_1}</div>
-              ${order.billing.address_2 ? `<div>${order.billing.address_2}</div>` : ''}
-              <div>${order.billing.city}, ${order.billing.state} ${order.billing.postcode}</div>
-              <div>${order.billing.country}</div>
-            </div>
-            <div style="padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 13px;">
-              <div style="margin-bottom: 4px;">
-                <span style="color: #6b7280;">Email:</span> 
-                <span style="color: #1e40af;">${order.billing.email}</span>
-              </div>
-              <div>
-                <span style="color: #6b7280;">Phone:</span> 
-                <span style="color: #374151;">${order.billing.phone}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div style="background: #f9fafb; padding: 24px; border-radius: 8px;">
-          <h3 style="margin: 0 0 16px 0; color: #1e40af; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Shipping Information</h3>
-          <div style="color: #374151; font-size: 14px; line-height: 1.6;">
-            <div style="font-weight: 600; color: #111827; font-size: 16px; margin-bottom: 8px;">
-              ${order.shipping.first_name} ${order.shipping.last_name}
-            </div>
-            ${order.shipping.company ? `<div style="margin-bottom: 4px; color: #6b7280;">${order.shipping.company}</div>` : ''}
-            <div>
-              <div>${order.shipping.address_1}</div>
-              ${order.shipping.address_2 ? `<div>${order.shipping.address_2}</div>` : ''}
-              <div>${order.shipping.city}, ${order.shipping.state} ${order.shipping.postcode}</div>
-              <div>${order.shipping.country}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Order Items -->
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-        <thead>
-          <tr>
-            <th style="background-color: #f3f4f6; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Item</th>
-            <th style="background-color: #f3f4f6; padding: 12px; text-align: right; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Qty</th>
-            <th style="background-color: #f3f4f6; padding: 12px; text-align: right; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Price</th>
-            <th style="background-color: #f3f4f6; padding: 12px; text-align: right; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${order.line_items.map(item => `
-            <tr>
-              <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${item.name}</td>
-              <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${item.quantity}</td>
-              <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.price)}</td>
-              <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.total)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-
-      <!-- Totals -->
-      <div style="margin-left: auto; width: 300px;">
-        <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-          <span>Subtotal:</span>
-          <span>${formatCurrency(subtotal.toString())}</span>
-        </div>
-        ${parseFloat(order.shipping_total) > 0 ? `
-          <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-            <span>Shipping:</span>
-            <span>${formatCurrency(order.shipping_total)}</span>
-          </div>
-        ` : ''}
-        ${parseFloat(order.total_tax) > 0 ? `
-          <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-            <span>Tax:</span>
-            <span>${formatCurrency(order.total_tax)}</span>
-          </div>
-        ` : ''}
-        ${totalDiscount > 0 ? `
-          <div style="display: flex; justify-content: space-between; padding: 8px 0; color: #059669;">
-            <span>Discount${order.coupon_lines?.length > 0 ? ` (${order.coupon_lines.map((c: any) => c.code).join(', ')})` : ''}:</span>
-            <span>-${formatCurrency(totalDiscount.toString())}</span>
-          </div>
-        ` : ''}
-        <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold; font-size: 18px; border-top: 2px solid #e5e7eb; margin-top: 10px; padding-top: 10px;">
-          <span>Total:</span>
-          <span>${formatCurrency(order.total)}</span>
-        </div>
-      </div>
-
-      ${order.customer_note ? `
-        <div style="margin-top: 40px; padding: 16px; background: #f3f4f6; border-radius: 8px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 14px;">Customer Note:</h3>
-          <p style="margin: 0; color: #666;">${order.customer_note}</p>
-        </div>
-      ` : ''}
-
-      <!-- Footer -->
-      <div style="margin-top: 80px; padding-top: 40px; border-top: 2px solid #e5e7eb;">
-        <div style="background: #f9fafb; border-radius: 12px; padding: 30px; text-align: center; margin-bottom: 20px;">
-          <h3 style="margin: 0 0 16px 0; color: #1e40af; font-size: 20px; font-weight: 600;">Thank You for Your Business!</h3>
-          <p style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
-            We appreciate your trust in us. If you have any questions about this invoice,<br>
-            please don't hesitate to contact us.
-          </p>
-        </div>
-        
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px 0;">
-          <div style="color: #6b7280; font-size: 13px;">
-            <div style="margin-bottom: 8px;">
-              <span style="font-weight: 600; color: #374151;">Payment Method:</span> 
-              <span style="color: #111827;">${order.payment_method_title || (order.payment_method ? order.payment_method.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not specified')}</span>
-            </div>
-            ${order.transaction_id ? `
-              <div>
-                <span style="font-weight: 600; color: #374151;">Transaction ID:</span> 
-                <span style="color: #111827; font-family: monospace;">${order.transaction_id}</span>
-              </div>
-            ` : ''}
-          </div>
-          
-          <div style="text-align: right; color: #9ca3af; font-size: 12px;">
-            <div>Invoice generated on ${format(new Date(), 'MMM dd, yyyy')}</div>
-            ${shop?.name ? `<div style="margin-top: 4px;">© ${new Date().getFullYear()} ${shop.name}</div>` : ''}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(tempDiv);
-
-  try {
-    // Convert HTML to canvas
-    const canvas = await html2canvas(tempDiv, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      windowWidth: tempDiv.scrollWidth,
-      windowHeight: tempDiv.scrollHeight
-    });
-
-    // Create PDF
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-
-    const imgWidth = 210; // A4 width in mm
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    
-    // Add image to PDF
-    const imgData = canvas.toDataURL('image/png');
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-
-    // Get PDF as blob
-    const pdfBlob = pdf.output('blob');
-    
-    return pdfBlob;
-  } finally {
-    // Cleanup
-    document.body.removeChild(tempDiv);
-  }
-}
-
-export async function downloadInvoicePDF(order: Order, shop?: Shop) {
-  try {
-    const pdfBlob = await generateInvoicePDF({ order, shop });
-    
-    // Create download link
-    const url = URL.createObjectURL(pdfBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `invoice-${order.number}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    
-    // Cleanup
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    throw error;
-  }
-}
-
-export async function printInvoicePDF(order: Order, shop?: Shop) {
-  try {
-    const pdfBlob = await generateInvoicePDF({ order, shop });
-    
-    // Create URL for the PDF
-    const url = URL.createObjectURL(pdfBlob);
-    
-    // Open in new window and print
-    const printWindow = window.open(url, '_blank');
-    if (printWindow) {
-      printWindow.onload = () => {
-        printWindow.print();
-      };
-    }
-    
-    // Cleanup after a delay
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
-  } catch (error) {
-    console.error('Error printing PDF:', error);
-    throw error;
-  }
-}
+// Component for rendering PDF download link
+export const InvoicePDFLink = ({ order, shop }: { order: Order; shop: Shop | null }) => {
+  const invoiceNumber = getInvoiceNumber(order, shop);
+  const fileName = `Rechnung-${invoiceNumber}.pdf`;
+  
+  return (
+    <PDFDownloadLink
+      document={<InvoiceDocument order={order} shop={shop} />}
+      fileName={fileName}
+    >
+      {({ blob, url, loading, error }) =>
+        loading ? 'Generiere PDF...' : 'PDF herunterladen'
+      }
+    </PDFDownloadLink>
+  );
+};

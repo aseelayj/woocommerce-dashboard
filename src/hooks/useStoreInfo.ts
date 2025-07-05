@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Shop } from '@/types';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
+import { getStoreLogoUrl } from '@/config/store-logos';
 
 export function useStoreInfo(shop: Shop | null) {
   const [storeInfo, setStoreInfo] = useState<Shop['storeInfo'] | null>(null);
@@ -28,6 +29,22 @@ export function useStoreInfo(shop: Shop | null) {
           setStoreInfo(info);
           // Update the shop object with store info
           shop.storeInfo = info;
+        }
+        
+        // Try to fetch logo URL if not already present
+        if (!shop.logoUrl) {
+          // First check hardcoded mappings
+          const hardcodedLogo = getStoreLogoUrl(shop.baseUrl);
+          if (hardcodedLogo) {
+            shop.logoUrl = hardcodedLogo;
+          } else if (isUsingRealAPI()) {
+            // If no hardcoded logo, try to fetch from WordPress/WooCommerce API
+            const logoUrl = await api.getSiteLogoUrl();
+            if (logoUrl) {
+              shop.logoUrl = logoUrl;
+              // TODO: Update the store in Supabase with the fetched logo URL
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to fetch store info:', error);

@@ -19,6 +19,7 @@ export type Database = {
           updated_at: string;
           user_id: string;
           is_active: boolean;
+          logo_url: string | null;
         };
         Insert: {
           id?: string;
@@ -30,6 +31,7 @@ export type Database = {
           updated_at?: string;
           user_id: string;
           is_active?: boolean;
+          logo_url?: string | null;
         };
         Update: {
           id?: string;
@@ -41,6 +43,7 @@ export type Database = {
           updated_at?: string;
           user_id?: string;
           is_active?: boolean;
+          logo_url?: string | null;
         };
       };
     };

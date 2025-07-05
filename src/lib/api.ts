@@ -188,6 +188,12 @@ export class WooCommerceAPI {
       total,
     }));
   }
+
+  async getInvoiceDownloadUrl(orderId: number): Promise<string | null> {
+    // Mock implementation - return null since mock data doesn't have real invoices
+    console.log('Mock API: getInvoiceDownloadUrl called for order', orderId);
+    return null;
+  }
 }
 
 // Shop management functions

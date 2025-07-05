@@ -3,9 +3,11 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { Order, Shop } from '@/types';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { Loader2, Package } from 'lucide-react';
+import { Loader2, Store } from 'lucide-react';
 import { OrderStatusBadge } from './OrderStatusBadge';
 import { formatStoreCurrency } from '@/lib/currency';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getStoreLogoUrl, getStoreLogoByName } from '@/config/store-logos';
 
 interface InfiniteScrollOrdersTableProps {
   orders: (Order & { shopName?: string; shopId?: string })[];
@@ -76,13 +78,12 @@ export function InfiniteScrollOrdersTable({
         <table className="w-full table-fixed">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-32">Order</th>
-              <th className="text-left px-4 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-16"></th>
-              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-36">Date</th>
-              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-64">Customer</th>
               {showStoreColumn && (
-                <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-36">Store</th>
+                <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-64">Store</th>
               )}
+              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-32">Order</th>
+              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-36">Date</th>
+              <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-48">Customer</th>
               <th className="text-left px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-36">Status</th>
               <th className="text-right px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-32">Total</th>
               <th className="text-center px-6 py-4 font-medium text-gray-700 text-xs uppercase tracking-wider w-20">Actions</th>
@@ -143,50 +144,64 @@ export function InfiniteScrollOrdersTable({
                       <tr
                         className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                       >
+                        {showStoreColumn && (
+                          <td className="px-6 py-4 w-64">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8 flex-shrink-0">
+                                {(() => {
+                                  // First try to find shop by ID
+                                  let shop = shops?.find(s => s.id === order.shopId);
+                                  
+                                  // If not found by ID, try to match by shop name or store URL
+                                  if (!shop && shops && order.shopName) {
+                                    shop = shops.find(s => 
+                                      s.name.toLowerCase() === order.shopName.toLowerCase() ||
+                                      s.name.toLowerCase().includes(order.shopName.toLowerCase()) ||
+                                      order.shopName.toLowerCase().includes(s.name.toLowerCase())
+                                    );
+                                  }
+                                  
+                                  // Get logo URL either from shop or from hardcoded mappings
+                                  let logoUrl = shop?.logoUrl;
+                                  
+                                  // If no logo from shop, try to get from hardcoded mappings based on shop's base URL
+                                  if (!logoUrl && shop?.baseUrl) {
+                                    logoUrl = getStoreLogoUrl(shop.baseUrl);
+                                  }
+                                  
+                                  // If still no logo, try to determine from order's shop name
+                                  if (!logoUrl && order.shopName) {
+                                    logoUrl = getStoreLogoByName(order.shopName);
+                                  }
+                                  
+                                  
+                                  return logoUrl ? (
+                                    <AvatarImage 
+                                      src={logoUrl} 
+                                      alt={order.shopName || 'Store logo'}
+                                      className="object-contain"
+                                    />
+                                  ) : null;
+                                })()}
+                                <AvatarFallback className="bg-blue-100 text-blue-700 text-xs font-semibold">
+                                  {order.shopName ? order.shopName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : <Store className="h-4 w-4" />}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="text-xs font-medium text-gray-700">
+                                {order.shopName || 'Unknown'}
+                              </div>
+                            </div>
+                          </td>
+                        )}
                         <td className="px-6 py-4 w-32 cursor-pointer" onClick={() => onOrderSelect(order)}>
                           <div className="font-medium text-gray-900">#{order.number}</div>
                           <div className="text-xs text-gray-500">{order.line_items.length} items</div>
-                        </td>
-                        <td className="px-4 py-4 w-16 cursor-pointer" onClick={() => onOrderSelect(order)}>
-                          {(() => {
-                            // Get first product image
-                            const firstItem = order.line_items[0];
-                            let imageUrl = null;
-                            
-                            if (firstItem?.image) {
-                              if (typeof firstItem.image === 'string') {
-                                imageUrl = firstItem.image;
-                              } else if (firstItem.image.src) {
-                                imageUrl = firstItem.image.src;
-                              }
-                            }
-                            
-                            return imageUrl ? (
-                              <img
-                                src={imageUrl}
-                                alt={firstItem.name}
-                                className="w-10 h-10 object-cover rounded border border-gray-200"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling;
-                                  if (fallback) fallback.classList.remove('hidden');
-                                }}
-                              />
-                            ) : (
-                              <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
-                                <Package className="h-5 w-5 text-gray-400" />
-                              </div>
-                            );
-                          })()}
-                          <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center hidden">
-                            <Package className="h-5 w-5 text-gray-400" />
-                          </div>
                         </td>
                         <td className="px-6 py-4 w-36 cursor-pointer" onClick={() => onOrderSelect(order)}>
                           <div className="text-sm text-gray-900">{format(new Date(order.date_created), 'MMM dd, yyyy')}</div>
                           <div className="text-xs text-gray-500">{format(new Date(order.date_created), 'HH:mm')}</div>
                         </td>
-                        <td className="px-6 py-4 w-64">
+                        <td className="px-6 py-4 w-48">
                           <div className="font-medium text-gray-900 cursor-pointer truncate pr-2" onClick={() => onOrderSelect(order)}>
                             {order.customer.first_name} {order.customer.last_name}
                           </div>
@@ -194,13 +209,6 @@ export function InfiniteScrollOrdersTable({
                             {order.customer.email}
                           </div>
                         </td>
-                        {showStoreColumn && (
-                          <td className="px-6 py-4 w-36">
-                            <div className="text-sm font-medium text-gray-700 truncate">
-                              {order.shopName || 'Unknown'}
-                            </div>
-                          </td>
-                        )}
                         <td className="px-6 py-4 w-36 cursor-pointer" onClick={() => onOrderSelect(order)}>
                           <OrderStatusBadge status={order.status} />
                         </td>

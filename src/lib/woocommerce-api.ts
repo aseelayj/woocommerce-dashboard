@@ -1,5 +1,6 @@
 import { storesService } from './supabase-stores';
 import { apiCache } from './cache';
+import { getStoreLogoUrl } from '@/config/store-logos';
 
 interface WooCommerceError {
   code: string;
@@ -18,6 +19,12 @@ export class WooCommerceAPI {
     const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
     this.baseUrl = `${cleanUrl}/wp-json/wc/v3`;
     this.authHeader = `Basic ${btoa(`${consumerKey}:${consumerSecret}`)}`;
+  }
+  
+  // Get the base WordPress URL for accessing WordPress REST API
+  private getWordPressApiUrl(): string {
+    const url = this.baseUrl.replace('/wp-json/wc/v3', '');
+    return url;
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -454,6 +461,103 @@ export class WooCommerceAPI {
   // Webhooks
   async getWebhooks() {
     return this.request<any[]>('/webhooks');
+  }
+  
+  // Get invoice download URL for WooCommerce PDF Invoices plugin
+  async getInvoiceDownloadUrl(orderId: number): Promise<string | null> {
+    try {
+      // Get order to access order key
+      const order = await this.getOrder(orderId);
+      
+      if (!order || !order.order_key) {
+        return null;
+      }
+      
+      const baseUrl = this.baseUrl.replace('/wp-json/wc/v3', '');
+      
+      // Method 1: Simple direct URL (from simple-invoice-solution.php)
+      const simpleUrl = `${baseUrl}/?get_invoice=1&order_id=${orderId}&key=${order.order_key}`;
+      
+      // Method 2: Custom AJAX endpoint
+      const ajaxUrl = `${baseUrl}/wp-admin/admin-ajax.php?action=get_wc_invoice&order_id=${orderId}&key=${order.order_key}`;
+      
+      // Method 3: Check if order response already has invoice_url
+      if (order.invoice_url) {
+        return order.invoice_url;
+      }
+      
+      // Method 4: Check meta data for invoice URL
+      const invoiceUrl = order.meta_data?.find(meta => 
+        meta.key === '_invoice_url' || 
+        meta.key === '_wcpdf_invoice_url'
+      )?.value;
+      
+      if (invoiceUrl) {
+        return invoiceUrl;
+      }
+      
+      // Return the simple URL as primary option
+      return simpleUrl;
+      
+    } catch (error) {
+      console.error('Error getting invoice download URL:', error);
+      return null;
+    }
+  }
+  
+  // Get a single order
+  async getOrder(orderId: number): Promise<Order> {
+    return this.request<Order>(`/orders/${orderId}`);
+  }
+  
+  // Site Logo - Try to fetch from hardcoded mappings first, then WordPress REST API
+  async getSiteLogoUrl(): Promise<string | null> {
+    try {
+      // First check hardcoded mappings
+      const hardcodedLogo = getStoreLogoUrl(this.getWordPressApiUrl());
+      if (hardcodedLogo) {
+        return hardcodedLogo;
+      }
+      
+      // If no hardcoded logo, try to get site info from WordPress REST API
+      const wpApiUrl = this.getWordPressApiUrl();
+      const wpResponse = await fetch(`${wpApiUrl}/wp-json/`, {
+        headers: {
+          'Authorization': this.authHeader,
+        },
+      });
+      
+      if (wpResponse.ok) {
+        const wpData = await wpResponse.json();
+        
+        // Check if site_logo exists and fetch media details
+        if (wpData.site_logo) {
+          const mediaResponse = await fetch(`${wpApiUrl}/wp-json/wp/v2/media/${wpData.site_logo}`, {
+            headers: {
+              'Authorization': this.authHeader,
+            },
+          });
+          
+          if (mediaResponse.ok) {
+            const mediaData = await mediaResponse.json();
+            // Return the full size URL or fallback to source_url
+            return mediaData.media_details?.sizes?.full?.source_url || mediaData.source_url || null;
+          }
+        }
+      }
+      
+      // Fallback: Check WooCommerce settings for any custom logo setting
+      const settings = await this.getSettingOptions('general');
+      const logoSetting = settings.find((s: any) => s.id === 'site_logo' || s.id === 'store_logo');
+      if (logoSetting?.value) {
+        return logoSetting.value;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching site logo:', error);
+      return null;
+    }
   }
 }
 

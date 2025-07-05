@@ -21,7 +21,7 @@ import { format, subDays } from 'date-fns';
 import { apiCache } from '@/lib/cache';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
-import { downloadInvoicePDF } from '@/components/orders/InvoicePDF';
+import { downloadInvoicePDF } from '@/components/orders/InvoiceHTML';
 import { toast } from 'sonner';
 import { getStoreCurrency } from '@/lib/currency';
 import { getTranslatedStatus } from '@/lib/translations';

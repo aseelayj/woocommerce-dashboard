@@ -2,6 +2,7 @@ import { Order, OrdersResponse, FilterOptions, PaginationOptions, Shop } from '@
 import { storesService } from './supabase-stores';
 import { createWooCommerceAPI, WooCommerceAPI } from './woocommerce-api';
 import { authService } from './supabase-auth';
+import { getStoreLogoUrl } from '@/config/store-logos';
 
 // Cache for WooCommerce API instances
 const apiCache = new Map<string, WooCommerceAPI>();
@@ -240,6 +241,11 @@ export class SupabaseWooCommerceAPI {
       timezone: ''
     };
   }
+
+  async getInvoiceDownloadUrl(orderId: number): Promise<string | null> {
+    const api = await getWooCommerceAPI(this.storeId);
+    return api.getInvoiceDownloadUrl(orderId);
+  }
 }
 
 // Enhanced Shop management API with Supabase
@@ -250,15 +256,44 @@ export const shopAPI = {
 
     const stores = await storesService.getStores(user.id);
     
-    return stores.map(store => ({
-      id: store.id,
-      name: store.name,
-      baseUrl: store.url,
-      consumerKey: store.consumer_key,
-      consumerSecret: store.consumer_secret,
-      isActive: store.is_active,
-      createdAt: store.created_at,
-    }));
+    // Check for hardcoded logos and update if needed
+    // Removed logo update logic since we're using hardcoded logos
+    // const shopsToUpdate: Array<{ id: string; logo_url: string }> = [];
+    
+    const shops = stores.map(store => {
+      // Check if we have a hardcoded logo for this store
+      const hardcodedLogo = getStoreLogoUrl(store.url);
+      
+      // No longer updating database with logos - using hardcoded mappings only
+      // if (hardcodedLogo && hardcodedLogo !== store.logo_url) {
+      //   shopsToUpdate.push({ id: store.id, logo_url: hardcodedLogo });
+      // }
+      
+      return {
+        id: store.id,
+        name: store.name,
+        baseUrl: store.url,
+        consumerKey: store.consumer_key,
+        consumerSecret: store.consumer_secret,
+        isActive: store.is_active,
+        createdAt: store.created_at,
+        logoUrl: hardcodedLogo || store.logo_url, // Use hardcoded if available
+      };
+    });
+    
+    // Removed background logo updates to avoid 400 errors
+    // Update stores with hardcoded logos in the background
+    // if (shopsToUpdate.length > 0) {
+    //   Promise.all(
+    //     shopsToUpdate.map(({ id, logo_url }) =>
+    //       storesService.updateStore(id, { logo_url }).catch(err =>
+    //         console.error(`Failed to update logo for store ${id}:`, err)
+    //       )
+    //     )
+    //   );
+    // }
+    
+    return shops;
   },
 
   async createShop(shop: Omit<Shop, 'id' | 'createdAt'>): Promise<Shop> {
@@ -284,6 +319,7 @@ export const shopAPI = {
       consumerSecret: newStore.consumer_secret,
       isActive: newStore.is_active,
       createdAt: newStore.created_at,
+      logoUrl: newStore.logo_url,
     };
   },
 
@@ -294,6 +330,7 @@ export const shopAPI = {
     if (updates.baseUrl !== undefined) updateData.url = updates.baseUrl;
     if (updates.consumerKey !== undefined) updateData.consumer_key = updates.consumerKey;
     if (updates.consumerSecret !== undefined) updateData.consumer_secret = updates.consumerSecret;
+    if (updates.logoUrl !== undefined) updateData.logo_url = updates.logoUrl;
 
     const updatedStore = await storesService.updateStore(shopId, updateData);
 
@@ -308,6 +345,7 @@ export const shopAPI = {
       consumerSecret: updatedStore.consumer_secret,
       isActive: updatedStore.is_active,
       createdAt: updatedStore.created_at,
+      logoUrl: updatedStore.logo_url,
     };
   },
 

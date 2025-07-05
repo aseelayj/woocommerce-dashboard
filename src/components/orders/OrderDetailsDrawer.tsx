@@ -146,7 +146,7 @@ export function OrderDetailsDrawer({
     if (format === 'pdf') {
       // For PDF, pass the shop with storeInfo
       const shopWithInfo = shop && storeInfo ? { ...shop, storeInfo } : shop;
-      const downloadPromise = downloadInvoicePDF(order, shopWithInfo);
+      const downloadPromise = downloadInvoicePDF(order, shopWithInfo || null);
       toast.promise(downloadPromise, {
         loading: 'Generating PDF invoice...',
         success: `Invoice for order #${order.number} downloaded as PDF`,
@@ -167,7 +167,7 @@ export function OrderDetailsDrawer({
     try {
       // For print, pass the shop with storeInfo
       const shopWithInfo = shop && storeInfo ? { ...shop, storeInfo } : shop;
-      await printInvoicePDF(order, shopWithInfo);
+      await printInvoicePDF(order, shopWithInfo || null);
       toast.success(`Opening print dialog for order #${order.number}`);
     } catch (error) {
       console.error('Error printing invoice:', error);

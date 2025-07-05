@@ -1,6 +1,7 @@
 import { storesService } from './supabase-stores';
 import { apiCache } from './cache';
 import { getStoreLogoUrl } from '@/config/store-logos';
+import { Order } from '@/types';
 
 interface WooCommerceError {
   code: string;
@@ -146,8 +147,8 @@ export class WooCommerceAPI {
     }
   }
 
-  async getOrder(id: number) {
-    return this.request<any>(`/orders/${id}`);
+  async getOrder(id: number): Promise<Order> {
+    return this.request<Order>(`/orders/${id}`);
   }
 
   async updateOrder(id: number, data: any) {
@@ -479,7 +480,7 @@ export class WooCommerceAPI {
       const simpleUrl = `${baseUrl}/?get_invoice=1&order_id=${orderId}&key=${order.order_key}`;
       
       // Method 2: Custom AJAX endpoint
-      const ajaxUrl = `${baseUrl}/wp-admin/admin-ajax.php?action=get_wc_invoice&order_id=${orderId}&key=${order.order_key}`;
+      // const ajaxUrl = `${baseUrl}/wp-admin/admin-ajax.php?action=get_wc_invoice&order_id=${orderId}&key=${order.order_key}`;
       
       // Method 3: Check if order response already has invoice_url
       if (order.invoice_url) {
@@ -487,7 +488,7 @@ export class WooCommerceAPI {
       }
       
       // Method 4: Check meta data for invoice URL
-      const invoiceUrl = order.meta_data?.find(meta => 
+      const invoiceUrl = order.meta_data?.find((meta: any) => 
         meta.key === '_invoice_url' || 
         meta.key === '_wcpdf_invoice_url'
       )?.value;
@@ -505,10 +506,6 @@ export class WooCommerceAPI {
     }
   }
   
-  // Get a single order
-  async getOrder(orderId: number): Promise<Order> {
-    return this.request<Order>(`/orders/${orderId}`);
-  }
   
   // Site Logo - Try to fetch from hardcoded mappings first, then WordPress REST API
   async getSiteLogoUrl(): Promise<string | null> {

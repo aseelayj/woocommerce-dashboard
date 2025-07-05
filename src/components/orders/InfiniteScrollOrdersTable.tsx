@@ -155,9 +155,9 @@ export function InfiniteScrollOrdersTable({
                                   // If not found by ID, try to match by shop name or store URL
                                   if (!shop && shops && order.shopName) {
                                     shop = shops.find(s => 
-                                      s.name.toLowerCase() === order.shopName.toLowerCase() ||
-                                      s.name.toLowerCase().includes(order.shopName.toLowerCase()) ||
-                                      order.shopName.toLowerCase().includes(s.name.toLowerCase())
+                                      s.name.toLowerCase() === order.shopName!.toLowerCase() ||
+                                      s.name.toLowerCase().includes(order.shopName!.toLowerCase()) ||
+                                      order.shopName!.toLowerCase().includes(s.name.toLowerCase())
                                     );
                                   }
                                   
@@ -166,12 +166,12 @@ export function InfiniteScrollOrdersTable({
                                   
                                   // If no logo from shop, try to get from hardcoded mappings based on shop's base URL
                                   if (!logoUrl && shop?.baseUrl) {
-                                    logoUrl = getStoreLogoUrl(shop.baseUrl);
+                                    logoUrl = getStoreLogoUrl(shop.baseUrl) || undefined;
                                   }
                                   
                                   // If still no logo, try to determine from order's shop name
                                   if (!logoUrl && order.shopName) {
-                                    logoUrl = getStoreLogoByName(order.shopName);
+                                    logoUrl = getStoreLogoByName(order.shopName) || undefined;
                                   }
                                   
                                   

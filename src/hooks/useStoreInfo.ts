@@ -37,13 +37,6 @@ export function useStoreInfo(shop: Shop | null) {
           const hardcodedLogo = getStoreLogoUrl(shop.baseUrl);
           if (hardcodedLogo) {
             shop.logoUrl = hardcodedLogo;
-          } else if (isUsingRealAPI()) {
-            // If no hardcoded logo, try to fetch from WordPress/WooCommerce API
-            const logoUrl = await api.getSiteLogoUrl();
-            if (logoUrl) {
-              shop.logoUrl = logoUrl;
-              // TODO: Update the store in Supabase with the fetched logo URL
-            }
           }
         }
       } catch (error) {

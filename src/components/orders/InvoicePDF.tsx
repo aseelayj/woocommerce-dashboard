@@ -1,8 +1,7 @@
-import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, pdf, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import { Order, Shop } from '@/types';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { getStoreLogoBase64 } from '@/config/store-logos-base64';
 
 // Create styles
 const styles = StyleSheet.create({
@@ -415,7 +414,7 @@ export const InvoicePDFLink = ({ order, shop }: { order: Order; shop: Shop | nul
       document={<InvoiceDocument order={order} shop={shop} />}
       fileName={fileName}
     >
-      {({ blob, url, loading, error }) =>
+      {({ loading }) =>
         loading ? 'Generiere PDF...' : 'PDF herunterladen'
       }
     </PDFDownloadLink>

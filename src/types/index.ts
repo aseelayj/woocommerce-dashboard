@@ -66,6 +66,7 @@ export interface OrderItem {
   total: string;
   image?: string | { id: string; src: string };
   price: string;
+  sku?: string;
   meta_data?: Array<{
     id: number;
     key: string;

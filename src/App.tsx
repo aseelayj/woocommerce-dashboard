@@ -16,7 +16,7 @@ import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useOrderNotifications, useNotificationSettings } from '@/hooks/useOrderNotifications';
-import { downloadInvoicePDF } from '@/components/orders/InvoiceHTML';
+import { downloadInvoicePDF } from '@/components/orders/InvoiceWorking';
 
 type ActiveView = 'dashboard' | 'orders' | 'settings';
 

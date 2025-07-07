@@ -38,9 +38,10 @@ import {
 } from 'lucide-react';
 import { Order, OrderStatus, Shop } from '@/types';
 import { format } from 'date-fns';
+import { de } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { downloadInvoice } from './InvoiceGenerator';
-import { downloadInvoicePDF, printInvoicePDF } from './InvoiceHTML';
+import { downloadInvoicePDF, printInvoicePDF } from './InvoiceWorking';
 import { useStoreInfo } from '@/hooks/useStoreInfo';
 import { useUpdateOrderStatus } from '@/hooks/useOrders';
 import { getStoreCurrency } from '@/lib/currency';
@@ -692,6 +693,84 @@ export function OrderDetailsDrawer({
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Payment Method Details */}
+                  <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <label className="text-sm font-semibold text-gray-700 mb-3 block">Bezahlung über</label>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-600">Method:</span>
+                        <span className="font-medium text-gray-900">{order.payment_method_title || 'N/A'}</span>
+                      </div>
+                      
+                      {/* Check meta_data for all payment details */}
+                      {order.meta_data && order.meta_data.length > 0 && (
+                        <>
+                          {order.meta_data
+                            .filter(meta => {
+                              const key = meta.key.toLowerCase();
+                              return (
+                                key.includes('payment') ||
+                                key.includes('transaction') ||
+                                key.includes('customer_ip') ||
+                                key.includes('_stripe_') ||
+                                key.includes('_paypal_') ||
+                                key === '_customer_ip_address' ||
+                                key === 'kunden_ip'
+                              ) && !key.startsWith('_wc_');
+                            })
+                            .map((meta, index) => {
+                              let displayKey = meta.key;
+                              
+                              // Format common keys
+                              if (meta.key === '_customer_ip_address') displayKey = 'Kunden IP';
+                              else if (meta.key === '_transaction_id') displayKey = 'Transaction ID';
+                              else if (meta.key === '_stripe_source_id') displayKey = 'Stripe Source';
+                              else if (meta.key === '_stripe_charge_id') displayKey = 'Stripe Charge ID';
+                              else if (meta.key === '_paypal_transaction_id') displayKey = 'PayPal Transaction';
+                              else displayKey = meta.display_key || meta.key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+                              
+                              return (
+                                <div key={index} className="flex items-start gap-2">
+                                  <span className="text-gray-600">{displayKey}:</span>
+                                  <span className="font-mono text-xs text-gray-900 break-all">
+                                    {meta.display_value || meta.value}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </>
+                      )}
+                      
+                      {order.transaction_id && !order.meta_data?.find(m => m.key === '_transaction_id') && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-gray-600">Transaction ID:</span>
+                          <span className="font-mono text-xs text-gray-900 break-all">
+                            {order.transaction_id}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {order.date_paid && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">Bezahlt am:</span>
+                          <span className="font-medium text-gray-900">
+                            {format(new Date(order.date_paid), 'dd. MMM yyyy @ HH:mm', { locale: de })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Debug: Show all meta_data in development */}
+                  {process.env.NODE_ENV === 'development' && order.meta_data && (
+                    <details className="mt-4">
+                      <summary className="cursor-pointer text-sm text-gray-600">Debug: All Metadata</summary>
+                      <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto">
+                        {JSON.stringify(order.meta_data, null, 2)}
+                      </pre>
+                    </details>
+                  )}
                   
                   {order.transaction_id && (
                     <div>

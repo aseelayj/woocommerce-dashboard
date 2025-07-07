@@ -1,8 +1,8 @@
 // Order status translations
 export const orderStatusTranslations: Record<string, string> = {
-  'pending': 'Pending',
+  'pending': 'Zahlung ausstehend',
   'processing': 'In Bearbeitung',
-  'completed': 'Completed', 
+  'completed': 'Abgeschlossen', 
   'on-hold': 'In Wartestellung',
   'cancelled': 'Storniert',
   'refunded': 'Erstattet',

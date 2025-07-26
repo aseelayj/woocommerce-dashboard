@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +24,7 @@ export function LoginPage() {
     } catch (err) {
       console.error('Login error:', err);
       if (err instanceof Error && err.message.includes('invalid_credentials')) {
-        setError('Invalid email or password. Have you signed up yet?');
+        setError('Invalid email or password.');
       } else {
         setError(err instanceof Error ? err.message : 'Failed to sign in');
       }
@@ -92,22 +91,14 @@ export function LoginPage() {
                 'Sign in'
               )}
             </Button>
-            <div className="text-sm text-center space-y-2">
-              <Link
-                to="/forgot-password"
+            <div className="text-sm text-center">
+              <a
+                href="#"
                 className="text-primary hover:underline"
+                onClick={(e) => e.preventDefault()}
               >
                 Forgot your password?
-              </Link>
-              <div>
-                Don't have an account?{' '}
-                <Link
-                  to="/signup"
-                  className="text-primary hover:underline"
-                >
-                  Sign up
-                </Link>
-              </div>
+              </a>
             </div>
           </CardFooter>
         </form>

@@ -8,7 +8,6 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
@@ -50,12 +49,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(session);
   };
 
-  const signUp = async (email: string, password: string) => {
-    const { user, session } = await authService.signUp(email, password);
-    setUser(user);
-    setSession(session);
-  };
-
   const signOut = async () => {
     await authService.signOut();
     setUser(null);
@@ -72,7 +65,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       loading,
       signIn,
-      signUp,
       signOut,
       resetPassword,
     }}>

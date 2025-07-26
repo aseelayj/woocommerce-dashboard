@@ -129,7 +129,7 @@ export function InfiniteScrollOrdersTable({
 
               return (
                 <div
-                  key={order.id}
+                  key={`${order.shopId || order.shopName || 'shop'}-${order.id}`}
                   style={{
                     position: 'absolute',
                     top: 0,

@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { LoginPage } from '@/components/auth/LoginPage';
-import { SignupPage } from '@/components/auth/SignupPage';
 import App from './App';
 import { isUsingRealAPI } from '@/lib/api-wrapper';
 
@@ -17,7 +16,6 @@ export function AppRouter() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<App />} />
         </Route>

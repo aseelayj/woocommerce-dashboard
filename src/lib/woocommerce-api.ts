@@ -14,11 +14,13 @@ interface WooCommerceError {
 export class WooCommerceAPI {
   private baseUrl: string;
   private authHeader: string;
+  private analyticsUrl: string;
 
   constructor(url: string, consumerKey: string, consumerSecret: string) {
     // Remove trailing slash from URL if present
     const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
     this.baseUrl = `${cleanUrl}/wp-json/wc/v3`;
+    this.analyticsUrl = `${cleanUrl}/wp-json/wc-analytics`;
     this.authHeader = `Basic ${btoa(`${consumerKey}:${consumerSecret}`)}`;
   }
   
@@ -32,9 +34,12 @@ export class WooCommerceAPI {
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
+        mode: 'cors',
+        credentials: 'omit',
         headers: {
           'Authorization': this.authHeader,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           ...options.headers,
         },
       });
@@ -107,8 +112,11 @@ export class WooCommerceAPI {
     
     try {
       const response = await fetch(`${this.baseUrl}/orders${query}`, {
+        mode: 'cors',
+        credentials: 'omit',
         headers: {
           'Authorization': this.authHeader,
+          'Accept': 'application/json',
         },
       });
 
@@ -356,6 +364,58 @@ export class WooCommerceAPI {
     return this.request<any>(`/reports/sales${query}`);
   }
 
+  // Analytics API method for revenue stats (properly excludes pending payments)
+  async getAnalyticsRevenueStats(params?: {
+    after?: string;
+    before?: string;
+    interval?: 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+  }) {
+    const queryParams = new URLSearchParams();
+    
+    // Set up date range
+    if (params?.after) queryParams.append('after', `${params.after}T00:00:00`);
+    if (params?.before) queryParams.append('before', `${params.before}T23:59:59`);
+    
+    // Set interval (default to day)
+    queryParams.append('interval', params?.interval || 'day');
+    
+    // Request specific fields
+    const fields = ['gross_sales', 'net_revenue', 'total_sales', 'refunds', 'coupons', 'taxes', 'shipping'];
+    fields.forEach((field, index) => {
+      queryParams.append(`fields[${index}]`, field);
+    });
+    
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const url = `${this.analyticsUrl}/reports/revenue/stats${query}`;
+    
+    console.log('Analytics API request:', { url, params });
+    
+    try {
+      const response = await fetch(url, {
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          'Authorization': this.authHeader,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Analytics API error response:', { status: response.status, body: errorText });
+        throw new Error(`Analytics API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Analytics API response:', data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching analytics revenue stats:', error);
+      throw error;
+    }
+  }
+
   async getTopSellersReport(params?: {
     period?: 'week' | 'month' | 'last_month' | 'year';
     date_min?: string;
@@ -519,8 +579,11 @@ export class WooCommerceAPI {
       // If no hardcoded logo, try to get site info from WordPress REST API
       const wpApiUrl = this.getWordPressApiUrl();
       const wpResponse = await fetch(`${wpApiUrl}/wp-json/`, {
+        mode: 'cors',
+        credentials: 'omit',
         headers: {
           'Authorization': this.authHeader,
+          'Accept': 'application/json',
         },
       });
       

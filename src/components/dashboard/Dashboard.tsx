@@ -143,18 +143,33 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
       }
       
       try {
-        // Try to get sales report for accurate totals
-        const salesReport = await api.getSalesReport({
-          date_min: dateFilters.dateFrom,
-          date_max: dateFilters.dateTo
+        // Try to use Analytics API for accurate revenue (excludes pending payments)
+        const analyticsData = await api.getAnalyticsRevenueStats({
+          after: dateFilters.dateFrom,
+          before: dateFilters.dateTo,
+          interval: 'day'
         });
         
-        if (salesReport && salesReport.total_sales) {
-          totalRevenue = parseFloat(salesReport.total_sales);
-          totalOrdersCount = parseInt(salesReport.total_orders) || 0;
+        if (analyticsData && analyticsData.totals) {
+          totalRevenue = parseFloat(analyticsData.totals.net_revenue || analyticsData.totals.total_sales || '0');
+          console.log('Using Analytics API for revenue:', totalRevenue);
         }
       } catch (error) {
-        console.log('Sales report not available, will calculate from orders');
+        console.log('Analytics API not available, trying sales report');
+        try {
+          // Fallback to sales report
+          const salesReport = await api.getSalesReport({
+            date_min: dateFilters.dateFrom,
+            date_max: dateFilters.dateTo
+          });
+          
+          if (salesReport && salesReport.total_sales) {
+            totalRevenue = parseFloat(salesReport.total_sales);
+            totalOrdersCount = parseInt(salesReport.total_orders) || 0;
+          }
+        } catch (error) {
+          console.log('Sales report not available, will calculate from orders');
+        }
       }
       
       // Get orders for display and additional stats
@@ -192,10 +207,11 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
 
       const currentOrders = currentPeriodResponse.orders;
 
-      // If we couldn't get totals from sales report, calculate from what we have
-      if (totalRevenue === 0 && totalOrdersCount === 0) {
-        // Use the total count from the response headers
-        totalOrdersCount = currentPeriodResponse.total;
+      // Always use the total order count from the API response
+      totalOrdersCount = currentPeriodResponse.total;
+      
+      // If we couldn't get revenue from Analytics API or sales report, calculate from orders
+      if (totalRevenue === 0) {
         totalRevenue = currentOrders.reduce((sum, order) => sum + parseFloat(order.total), 0);
         
         // Check if user wants to fetch all orders
@@ -234,6 +250,8 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
           
           console.log(`Total revenue from all orders: ${formatCurrency(totalRevenue)}`);
         }
+      } else {
+        console.log(`Using revenue from Analytics/Sales API: ${formatCurrency(totalRevenue)}`);
       }
 
       // Fetch order counts by status

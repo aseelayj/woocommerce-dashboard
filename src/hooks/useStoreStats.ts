@@ -60,76 +60,42 @@ async function fetchStoreStats(shop: Shop, dateRange?: DateRange): Promise<Store
   }
 
   try {
-    // Try to use the Reports API first
-    let reportsData = null;
+    // Use the Analytics API (it automatically excludes pending payments)
+    let analyticsData = null;
     try {
-      reportsData = await api.getReportsSales({
-        date_min: dateFilters.dateFrom,
-        date_max: dateFilters.dateTo
+      analyticsData = await api.getAnalyticsRevenueStats({
+        after: dateFilters.dateFrom,
+        before: dateFilters.dateTo,
+        interval: 'day'
       });
-      console.log(`Reports API data for ${shop.name}:`, {
-        total_sales: reportsData?.total_sales,
-        net_sales: reportsData?.net_sales,
-        total_orders: reportsData?.total_orders,
+      
+      console.log(`Analytics API data for ${shop.name}:`, {
+        fullResponse: analyticsData,
+        totals: analyticsData?.totals,
         dateFrom: dateFilters.dateFrom,
         dateTo: dateFilters.dateTo
       });
-    } catch (error) {
-      console.log(`Reports API not available for ${shop.name}, using fallback method`);
+    } catch (analyticsError) {
+      console.error(`Analytics API error for ${shop.name}:`, analyticsError);
+      // Fallback to calculating from orders
+      throw analyticsError; // Re-throw to use the fallback in the outer catch
     }
 
-    // If Reports API is available, use its data
-    if (reportsData && (reportsData.total_sales !== undefined || reportsData.net_sales !== undefined)) {
-      // Get total order count and status counts
-      const [ordersResp, statusPromises] = await Promise.all([
-        api.getOrders(dateFilters, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' }),
-        Promise.all(['completed', 'pending', 'processing', 'failed'].map(status =>
-          api.getOrders({ ...dateFilters, status }, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' })
-            .then(resp => ({ status, count: resp.total }))
-        ))
-      ]);
-
-      const statusMap = statusPromises.reduce((acc, { status, count }) => {
-        acc[status] = count;
-        return acc;
-      }, {} as Record<string, number>);
-
-      // Use net_sales if available, otherwise total_sales
-      const totalRevenue = reportsData.net_sales ? parseFloat(reportsData.net_sales) : parseFloat(reportsData.total_sales);
-      // Use actual order count from orders API, not the Reports API which might count line items
-      const totalOrders = ordersResp.total || 0;
-      const currency = getStoreCurrency(shop);
-
-      console.log(`${shop.name} stats from Reports API:`, {
-        revenue: totalRevenue,
-        orders: totalOrders,
-        reportsApiOrders: reportsData.total_orders,
-        currency,
-        avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
-        warning: reportsData.total_orders !== totalOrders ? 'Reports API order count differs from actual orders!' : null
-      });
-
-      return {
-        storeId: shop.id,
-        storeName: shop.name,
-        totalRevenue,
-        totalOrders,
-        completedOrders: statusMap.completed || 0,
-        pendingOrders: statusMap.pending || 0,
-        processingOrders: statusMap.processing || 0,
-        failedOrders: statusMap.failed || 0,
-        averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
-        currency
-      };
-    }
-
-    // Fallback to original method
-    const [ordersResp, salesResp, statusPromises] = await Promise.all([
+    // The Analytics API returns data in 'totals' object at the root level
+    const totals = analyticsData?.totals || {};
+    
+    // Get total order count and status counts
+    const [ordersResp, statusPromises] = await Promise.all([
       api.getOrders(dateFilters, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' }),
-      api.getSalesReport ? api.getSalesReport(dateFilters).catch(() => null) : Promise.resolve(null),
-      Promise.all(['completed', 'pending', 'processing', 'failed'].map(status =>
+      Promise.all([
+        'completed',
+        'pending', 
+        'processing',
+        'failed'
+      ].map(status =>
         api.getOrders({ ...dateFilters, status }, { page: 1, limit: 1, sortBy: 'date_created', sortOrder: 'desc' })
           .then(resp => ({ status, count: resp.total }))
+          .catch(() => ({ status, count: 0 }))
       ))
     ]);
 
@@ -138,45 +104,23 @@ async function fetchStoreStats(shop: Shop, dateRange?: DateRange): Promise<Store
       return acc;
     }, {} as Record<string, number>);
 
-    let totalRevenue = 0;
-    if (salesResp?.totalSales !== undefined) {
-      totalRevenue = salesResp.totalSales;
-    } else if (salesResp?.total_sales !== undefined) {
-      totalRevenue = parseFloat(salesResp.total_sales);
-    } else {
-      // Fallback: fetch ALL orders for revenue (not just completed)
-      console.log(`${shop.name}: No sales report available, fetching all orders for revenue calculation`);
-      
-      let allOrdersRevenue = 0;
-      let page = 1;
-      let hasMore = true;
-      
-      while (hasMore) {
-        const ordersPage = await api.getOrders(
-          dateFilters,
-          { page, limit: 100, sortBy: 'date_created', sortOrder: 'desc' }
-        );
-        
-        allOrdersRevenue += ordersPage.orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
-        
-        hasMore = page < ordersPage.totalPages;
-        page++;
-        
-        // Safety limit
-        if (page > 10) {
-          console.warn(`${shop.name}: Stopping at page 10 to prevent excessive API calls`);
-          break;
-        }
-      }
-      
-      totalRevenue = allOrdersRevenue;
-      console.log(`${shop.name} fallback revenue calculation: ${totalRevenue} from ${ordersResp.total} orders`);
-    }
-
-    const totalOrders = ordersResp.total;
+    // Use net_revenue from Analytics API (which excludes pending payments)
+    // Check different possible locations for the revenue data
+    const netRevenue = totals.net_revenue || totals.net_sales || analyticsData?.intervals?.[0]?.subtotals?.net_revenue || '0';
+    const totalRevenue = parseFloat(netRevenue);
+    const totalOrders = ordersResp.total || 0;
     const currency = getStoreCurrency(shop);
 
-    const result = {
+    console.log(`${shop.name} stats from Analytics API:`, {
+      revenue: totalRevenue,
+      netRevenue: netRevenue,
+      totalsObject: totals,
+      orders: totalOrders,
+      currency,
+      avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0
+    });
+
+    return {
       storeId: shop.id,
       storeName: shop.name,
       totalRevenue,
@@ -188,16 +132,6 @@ async function fetchStoreStats(shop: Shop, dateRange?: DateRange): Promise<Store
       averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
       currency
     };
-
-    console.log(`${shop.name} final stats (fallback):`, {
-      revenue: totalRevenue,
-      orders: totalOrders,
-      currency,
-      avgOrderValue: result.averageOrderValue,
-      salesResp: salesResp
-    });
-
-    return result;
   } catch (error) {
     console.error(`Error loading data for ${shop.name}:`, error);
     // Return zeros on error to prevent UI break

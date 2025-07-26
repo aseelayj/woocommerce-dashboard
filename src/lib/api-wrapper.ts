@@ -68,6 +68,10 @@ export class WooCommerceAPI {
   async getReportsSales(params?: any): Promise<any> {
     return (this.api as any).getReportsSales?.(params) || null;
   }
+
+  async getAnalyticsRevenueStats(params?: any): Promise<any> {
+    return (this.api as any).getAnalyticsRevenueStats?.(params) || null;
+  }
 }
 
 // Export the appropriate shop API based on configuration

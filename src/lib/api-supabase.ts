@@ -258,6 +258,17 @@ export class SupabaseWooCommerceAPI {
       return null;
     }
   }
+
+  async getAnalyticsRevenueStats(params?: any): Promise<any> {
+    const api = await getWooCommerceAPI(this.storeId);
+    try {
+      const response = await api.getAnalyticsRevenueStats(params);
+      return response;
+    } catch (error) {
+      console.warn('Error getting analytics revenue stats:', error);
+      return null;
+    }
+  }
 }
 
 // Enhanced Shop management API with Supabase

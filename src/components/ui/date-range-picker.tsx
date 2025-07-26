@@ -29,11 +29,12 @@ export function DateRangePicker({
   onValueChange,
   className,
 }: DateRangePickerProps) {
-  const [date, setDate] = React.useState<DateRange | undefined>(value)
   const [selectedPreset, setSelectedPreset] = React.useState<string>("")
 
+  // Use value prop directly instead of internal state
+  const date = value
+
   const handleDateChange = (newDate: DateRange | undefined) => {
-    setDate(newDate)
     setSelectedPreset("")
     onValueChange?.(newDate)
   }
@@ -83,7 +84,6 @@ export function DateRangePicker({
     }
 
     const newRange = { from, to }
-    setDate(newRange)
     onValueChange?.(newRange)
   }
 
@@ -118,10 +118,11 @@ export function DateRangePicker({
           <Calendar
             initialFocus
             mode="range"
-            defaultMonth={date?.from}
+            defaultMonth={date?.from || new Date()}
             selected={date}
             onSelect={handleDateChange}
             numberOfMonths={2}
+            disabled={(date) => date > new Date() || date < new Date('2020-01-01')}
           />
         </PopoverContent>
       </Popover>

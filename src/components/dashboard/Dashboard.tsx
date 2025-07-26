@@ -62,9 +62,15 @@ export function Dashboard({ activeShop, onViewChange }: DashboardProps) {
   const [isFromCache, setIsFromCache] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const now = new Date();
+    // Set to first day of current month
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    // Set to current date
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
     return {
-      from: new Date(now.getFullYear(), 0, 1), // January 1st of current year
-      to: now
+      from: startOfMonth,
+      to: today
     };
   });
 

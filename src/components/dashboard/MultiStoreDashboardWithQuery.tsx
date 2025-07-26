@@ -28,9 +28,15 @@ interface MultiStoreDashboardWithQueryProps {
 export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQueryProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const now = new Date();
+    // Set to first day of current month
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    // Set to current date
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
     return {
-      from: new Date(now.getFullYear(), 0, 1),
-      to: now
+      from: startOfMonth,
+      to: today
     };
   });
 
@@ -129,12 +135,15 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           <DateRangePicker
             value={dateRange}
-            onValueChange={setDateRange}
+            onValueChange={(range) => {
+              console.log('Date range changed:', range);
+              setDateRange(range);
+            }}
             className="w-full sm:w-auto"
           />
-          {dateRange && (
+          {dateRange && dateRange.from && dateRange.to && (
             <div className="text-sm text-gray-600">
-              Showing data from {format(dateRange.from!, 'MMM dd, yyyy')} to {format(dateRange.to!, 'MMM dd, yyyy')}
+              Showing data from {format(dateRange.from, 'MMM dd, yyyy')} to {format(dateRange.to, 'MMM dd, yyyy')}
             </div>
           )}
         </div>
@@ -157,12 +166,39 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
                 <DollarSign className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-gray-900">
-                  {formatCurrency(stats.totalRevenue)}
+                <div className="space-y-2">
+                  {stats.revenueByCurrency.EUR > 0 && (
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {new Intl.NumberFormat('de-DE', {
+                          style: 'currency',
+                          currency: 'EUR',
+                        }).format(stats.revenueByCurrency.EUR)}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {stats.ordersByCurrency.EUR} orders in EUR
+                      </p>
+                    </div>
+                  )}
+                  {stats.revenueByCurrency.USD > 0 && (
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: 'USD',
+                        }).format(stats.revenueByCurrency.USD)}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {stats.ordersByCurrency.USD} orders in USD
+                      </p>
+                    </div>
+                  )}
+                  {stats.revenueByCurrency.EUR === 0 && stats.revenueByCurrency.USD === 0 && (
+                    <div className="text-2xl font-bold text-gray-900">
+                      {formatCurrency(0)}
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Mixed currencies (EUR/USD)
-                </p>
               </CardContent>
             </Card>
 
@@ -187,12 +223,35 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
                 <TrendingUp className="h-4 w-4 text-purple-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-gray-900">
-                  {formatCurrency(stats.averageOrderValue)}
+                <div className="space-y-2">
+                  {stats.ordersByCurrency.EUR > 0 && (
+                    <div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {new Intl.NumberFormat('de-DE', {
+                          style: 'currency',
+                          currency: 'EUR',
+                        }).format(stats.revenueByCurrency.EUR / stats.ordersByCurrency.EUR)}
+                      </div>
+                      <p className="text-xs text-gray-500">EUR average</p>
+                    </div>
+                  )}
+                  {stats.ordersByCurrency.USD > 0 && (
+                    <div>
+                      <div className="text-xl font-bold text-gray-900">
+                        {new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: 'USD',
+                        }).format(stats.revenueByCurrency.USD / stats.ordersByCurrency.USD)}
+                      </div>
+                      <p className="text-xs text-gray-500">USD average</p>
+                    </div>
+                  )}
+                  {stats.totalOrders === 0 && (
+                    <div className="text-2xl font-bold text-gray-900">
+                      {formatCurrency(0)}
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Mixed currencies (EUR/USD)
-                </p>
               </CardContent>
             </Card>
 
@@ -317,10 +376,12 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
                   {/* Progress bar showing revenue contribution */}
                   <div className="mt-3">
                     <div className="flex justify-between text-xs text-gray-600 mb-1">
-                      <span>Revenue contribution</span>
+                      <span>Revenue contribution ({storeData.currency})</span>
                       <span>
-                        {stats.totalRevenue > 0 
-                          ? `${((storeData.totalRevenue / stats.totalRevenue) * 100).toFixed(1)}%`
+                        {storeData.currency === 'EUR' && stats.revenueByCurrency.EUR > 0
+                          ? `${((storeData.totalRevenue / stats.revenueByCurrency.EUR) * 100).toFixed(1)}%`
+                          : storeData.currency === 'USD' && stats.revenueByCurrency.USD > 0
+                          ? `${((storeData.totalRevenue / stats.revenueByCurrency.USD) * 100).toFixed(1)}%`
                           : '0%'}
                       </span>
                     </div>
@@ -328,8 +389,10 @@ export function MultiStoreDashboardWithQuery({ shops }: MultiStoreDashboardWithQ
                       <div 
                         className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                         style={{ 
-                          width: stats.totalRevenue > 0 
-                            ? `${(storeData.totalRevenue / stats.totalRevenue) * 100}%`
+                          width: storeData.currency === 'EUR' && stats.revenueByCurrency.EUR > 0
+                            ? `${(storeData.totalRevenue / stats.revenueByCurrency.EUR) * 100}%`
+                            : storeData.currency === 'USD' && stats.revenueByCurrency.USD > 0
+                            ? `${(storeData.totalRevenue / stats.revenueByCurrency.USD) * 100}%`
                             : '0%'
                         }}
                       />

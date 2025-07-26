@@ -174,6 +174,26 @@ export class WooCommerceAPI {
     };
   }
 
+  async getReportsSales(_params?: any) {
+    await delay(500);
+    
+    // Mock WooCommerce Reports API v3 response
+    return {
+      total_sales: '125430.00',
+      net_sales: '109547.00',
+      average_sales: '3562.57',
+      total_orders: 342,
+      total_items: 1205,
+      total_tax: '12543.00',
+      total_shipping: '2340.00',
+      total_refunds: '0.00',
+      total_discount: '3450.00',
+      totals_grouped_by: 'day',
+      totals: {},
+      total_customers: 289
+    };
+  }
+
   async getOrdersTotals() {
     await delay(300);
     

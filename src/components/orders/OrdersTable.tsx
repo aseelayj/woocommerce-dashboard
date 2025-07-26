@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { getTranslatedStatus } from '@/lib/translations';
+import { format } from 'date-fns';
 import {
   Select,
   SelectContent,
@@ -51,13 +52,14 @@ export function OrdersTable({
     return undefined;
   });
   
-  // Initialize date range on mount if not set
+  // Sync date range with filters
   useEffect(() => {
-    if (!dateRange && filters.dateFrom && filters.dateTo) {
-      setDateRange({
-        from: new Date(filters.dateFrom),
-        to: new Date(filters.dateTo)
-      });
+    if (filters.dateFrom || filters.dateTo) {
+      const newDateRange = {
+        from: filters.dateFrom ? new Date(filters.dateFrom + 'T00:00:00') : undefined,
+        to: filters.dateTo ? new Date(filters.dateTo + 'T23:59:59') : undefined
+      };
+      setDateRange(newDateRange);
     }
   }, [filters.dateFrom, filters.dateTo]);
 
@@ -91,8 +93,8 @@ export function OrdersTable({
     setDateRange(range);
     onFiltersChange({
       ...filters,
-      dateFrom: range?.from?.toISOString().split('T')[0],
-      dateTo: range?.to?.toISOString().split('T')[0],
+      dateFrom: range?.from ? format(range.from, 'yyyy-MM-dd') : undefined,
+      dateTo: range?.to ? format(range.to, 'yyyy-MM-dd') : undefined,
     });
     onPaginationChange({ ...pagination, page: 1 });
   };

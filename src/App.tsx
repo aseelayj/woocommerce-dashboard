@@ -119,6 +119,7 @@ function App() {
   const loadOrders = async (append = false) => {
     if (!activeShop) return;
 
+    console.log('Loading orders with filters:', filters);
     setLoading(true);
     try {
       const api = new WooCommerceAPI(isUsingRealAPI() ? activeShop.id : activeShop);

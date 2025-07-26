@@ -64,6 +64,10 @@ export class WooCommerceAPI {
   async getInvoiceDownloadUrl(orderId: number): Promise<string | null> {
     return (this.api as any).getInvoiceDownloadUrl?.(orderId) || null;
   }
+
+  async getReportsSales(params?: any): Promise<any> {
+    return (this.api as any).getReportsSales?.(params) || null;
+  }
 }
 
 // Export the appropriate shop API based on configuration

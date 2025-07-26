@@ -246,6 +246,19 @@ export class SupabaseWooCommerceAPI {
     const api = await getWooCommerceAPI(this.storeId);
     return api.getInvoiceDownloadUrl(orderId);
   }
+
+  async getReportsSales(params?: any): Promise<any> {
+    const api = await getWooCommerceAPI(this.storeId);
+    try {
+      // Try WooCommerce REST API v3 reports/sales endpoint
+      const response = await api.get('reports/sales', params);
+      return response;
+    } catch (error) {
+      console.warn('Reports API not available, falling back to getSalesReport:', error);
+      // Fallback to legacy sales report
+      return this.getSalesReport(params);
+    }
+  }
 }
 
 // Enhanced Shop management API with Supabase

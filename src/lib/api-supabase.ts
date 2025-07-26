@@ -250,13 +250,12 @@ export class SupabaseWooCommerceAPI {
   async getReportsSales(params?: any): Promise<any> {
     const api = await getWooCommerceAPI(this.storeId);
     try {
-      // Try WooCommerce REST API v3 reports/sales endpoint
-      const response = await api.get('reports/sales', params);
+      // Use the getSalesReport method from WooCommerceAPI
+      const response = await api.getSalesReport(params);
       return response;
     } catch (error) {
-      console.warn('Reports API not available, falling back to getSalesReport:', error);
-      // Fallback to legacy sales report
-      return this.getSalesReport(params);
+      console.warn('Error getting sales report:', error);
+      return null;
     }
   }
 }

@@ -13,13 +13,14 @@ import {
   BarChart3,
   Edit,
   X,
-  Search
+  Search,
+  Bug
 } from 'lucide-react';
 import { Shop } from '@/types';
 import { usePrefetchStoreStats } from '@/hooks/useStoreStats';
 import { usePrefetchOrders } from '@/hooks/useOrders';
 
-type ActiveView = 'dashboard' | 'orders' | 'settings';
+type ActiveView = 'dashboard' | 'orders' | 'settings' | 'debug';
 
 interface SidebarProps {
   shops: Shop[];
@@ -90,6 +91,11 @@ export function Sidebar({
       id: 'settings' as ActiveView, 
       icon: Settings, 
       label: 'Settings' 
+    },
+    { 
+      id: 'debug' as ActiveView, 
+      icon: Bug, 
+      label: 'Debug Orders' 
     },
   ];
 

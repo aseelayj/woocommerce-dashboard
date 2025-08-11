@@ -19,7 +19,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Shop } from '@/types';
 
-type ActiveView = 'dashboard' | 'orders' | 'settings';
+type ActiveView = 'dashboard' | 'orders' | 'settings' | 'debug';
 
 interface HeaderProps {
   activeShop: Shop | null;
@@ -38,6 +38,8 @@ export function Header({ activeShop, activeView, onRefresh, isLoading, isPolling
         return 'Orders Management';
       case 'settings':
         return 'Settings';
+      case 'debug':
+        return 'Debug Orders View';
       default:
         return 'WooCommerce Dashboard';
     }
@@ -51,6 +53,8 @@ export function Header({ activeShop, activeView, onRefresh, isLoading, isPolling
         return 'Track and manage your WooCommerce orders';
       case 'settings':
         return 'Configure your shops and application settings';
+      case 'debug':
+        return 'Simple view of all orders for comparison';
       default:
         return '';
     }

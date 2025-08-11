@@ -8,6 +8,7 @@ import { MultiStoreDashboardWithQuery as MultiStoreDashboard } from '@/component
 import { OrdersTable } from '@/components/orders/OrdersTable';
 import { MultiStoreOrders } from '@/components/orders/MultiStoreOrders';
 import { OrderDetailsDrawer } from '@/components/orders/OrderDetailsDrawer';
+import { OrdersDebugView } from '@/components/orders/OrdersDebugView';
 import { ShopForm } from '@/components/shops/ShopForm';
 import { Settings } from '@/components/settings/Settings';
 import { WooCommerceAPI, shopAPI, isUsingRealAPI } from '@/lib/api-wrapper';
@@ -18,7 +19,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useOrderNotifications, useNotificationSettings } from '@/hooks/useOrderNotifications';
 import { downloadInvoicePDF } from '@/components/orders/InvoiceWorking';
 
-type ActiveView = 'dashboard' | 'orders' | 'settings';
+type ActiveView = 'dashboard' | 'orders' | 'settings' | 'debug';
 
 function App() {
   // State management
@@ -290,6 +291,8 @@ function App() {
           return <MultiStoreDashboard shops={shops} />;
         }
         return <Dashboard activeShop={activeShop} onViewChange={setActiveView} />;
+      case 'debug':
+        return <OrdersDebugView shops={shops} />;
       case 'orders':
         if (viewAllStores) {
           return (

@@ -14,7 +14,7 @@ import {
 import { InfiniteScrollOrdersTable } from '@/components/orders/InfiniteScrollOrdersTable';
 import { Shop, Order } from '@/types';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
-import { format } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { apiCache } from '@/lib/cache';
 import { getTranslatedStatus } from '@/lib/translations';
 
@@ -29,6 +29,11 @@ interface OrderWithShop extends Order {
   shopId: string;
 }
 
+interface DateWindow {
+  start: Date;
+  end: Date;
+}
+
 export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: MultiStoreOrdersProps) {
   const [orders, setOrders] = useState<OrderWithShop[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,9 +41,16 @@ export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: Mu
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [shopFilter, setShopFilter] = useState<string>('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [, setTotalOrders] = useState(0);
+  
+  // Date window tracking for synchronized loading
+  const [currentDateWindow, setCurrentDateWindow] = useState<DateWindow>(() => ({
+    start: startOfDay(subDays(new Date(), 7)), // Start with last 7 days
+    end: endOfDay(new Date())
+  }));
+  const [oldestDateLoaded, setOldestDateLoaded] = useState<Date>(new Date());
+  const daysPerLoad = 7; // Load 7 days at a time
+  
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const now = new Date();
     return {
@@ -50,13 +62,19 @@ export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: Mu
   useEffect(() => {
     // Reset when filters change
     setOrders([]);
-    setCurrentPage(1);
+    setCurrentDateWindow({
+      start: startOfDay(subDays(new Date(), 7)),
+      end: endOfDay(new Date())
+    });
+    setOldestDateLoaded(new Date());
     setHasMore(true);
-    setTotalOrders(0);
-    loadAllShopsOrders(1);
+    loadOrdersForDateWindow({
+      start: startOfDay(subDays(new Date(), 7)),
+      end: endOfDay(new Date())
+    }, false);
   }, [shops, dateRange, statusFilter, shopFilter]);
 
-  const loadAllShopsOrders = async (page = currentPage, append = false) => {
+  const loadOrdersForDateWindow = async (window: DateWindow, append = false) => {
     if (!shops.length) return;
 
     if (!append) {
@@ -65,16 +83,23 @@ export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: Mu
     setLoadingShops([]);
 
     try {
-      // Prepare date filters
-      const dateFilters: any = {};
-      if (dateRange?.from) {
-        dateFilters.dateFrom = format(dateRange.from, 'yyyy-MM-dd');
-      }
-      if (dateRange?.to) {
-        dateFilters.dateTo = format(dateRange.to, 'yyyy-MM-dd');
-      }
+      // Prepare date filters for the current window
+      const dateFilters: any = {
+        dateFrom: format(window.start, 'yyyy-MM-dd'),
+        dateTo: format(window.end, 'yyyy-MM-dd')
+      };
+      
+      // Apply additional filters
       if (statusFilter) {
         dateFilters.status = statusFilter;
+      }
+      
+      // Apply date range filter (if set by user)
+      if (dateRange?.from && dateRange.from > window.start) {
+        dateFilters.dateFrom = format(dateRange.from, 'yyyy-MM-dd');
+      }
+      if (dateRange?.to && dateRange.to < window.end) {
+        dateFilters.dateTo = format(dateRange.to, 'yyyy-MM-dd');
       }
 
       // Filter shops if needed
@@ -89,58 +114,62 @@ export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: Mu
         try {
           const api = new WooCommerceAPI(isUsingRealAPI() ? shop.id : shop);
           
-          // Get orders for current page
+          // Get ALL orders for this date window from this shop
           const response = await api.getOrders(dateFilters, {
-            page: page,
-            limit: 20, // Smaller limit for progressive loading
+            page: 1,
+            limit: 100, // Get more orders per request
             sortBy: 'date_created',
             sortOrder: 'desc'
           });
 
-          // Track total orders
-          if (page === 1) {
-            setTotalOrders(prev => prev + response.total);
-          }
-
-          // Check if there are more pages
-          if (response.orders.length < 20 || page >= response.totalPages) {
-            setHasMore(false);
-          }
 
           // Add shop info to each order
-          return {
-            orders: response.orders.map(order => ({
-              ...order,
-              shopName: shop.name,
-              shopId: shop.id
-            })),
-            hasMore: page < response.totalPages
-          };
+          return response.orders.map(order => ({
+            ...order,
+            shopName: shop.name,
+            shopId: shop.id
+          }));
         } catch (error) {
           console.error(`Error loading orders for ${shop.name}:`, error);
-          return { orders: [], hasMore: false };
+          return [];
         } finally {
           setLoadingShops(prev => prev.filter(name => name !== shop.name));
         }
       });
 
       const allResults = await Promise.all(ordersPromises);
-      const combinedOrders = allResults.flatMap(r => r.orders);
-      const anyHasMore = allResults.some(r => r.hasMore);
+      const combinedOrders = allResults.flat();
 
-      // Sort all orders by date
-      combinedOrders.sort((a, b) => 
+      // Remove duplicates based on order ID
+      const uniqueOrdersMap = new Map<number, OrderWithShop>();
+      
+      if (append) {
+        // First add existing orders to the map
+        orders.forEach(order => {
+          uniqueOrdersMap.set(order.id, order);
+        });
+      }
+      
+      // Then add new orders (will overwrite duplicates)
+      combinedOrders.forEach(order => {
+        uniqueOrdersMap.set(order.id, order);
+      });
+      
+      // Convert back to array and sort by date (newest first)
+      const uniqueOrders = Array.from(uniqueOrdersMap.values()).sort((a, b) => 
         new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
       );
 
-      if (append) {
-        setOrders(prev => [...prev, ...combinedOrders]);
-      } else {
-        setOrders(combinedOrders);
+      setOrders(uniqueOrders);
+      
+      // Update the oldest date loaded
+      if (uniqueOrders.length > 0 && append) {
+        setOldestDateLoaded(window.start);
       }
       
-      setHasMore(anyHasMore);
-      setCurrentPage(page);
+      // Check if we can load more (have we reached the date range limit?)
+      const canLoadMore = dateRange?.from ? window.start > dateRange.from : true;
+      setHasMore(canLoadMore && uniqueOrders.length > 0);
     } catch (error) {
       console.error('Error loading multi-store orders:', error);
       if (!append) {
@@ -152,7 +181,20 @@ export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: Mu
   };
 
   const loadMore = async () => {
-    await loadAllShopsOrders(currentPage + 1, true);
+    // Calculate the next date window (going backwards in time)
+    const nextWindow: DateWindow = {
+      start: startOfDay(subDays(oldestDateLoaded, daysPerLoad)),
+      end: endOfDay(subDays(oldestDateLoaded, 1))
+    };
+    
+    // Make sure we don't go before the user's selected date range
+    if (dateRange?.from && nextWindow.start < dateRange.from) {
+      nextWindow.start = startOfDay(dateRange.from);
+    }
+    
+    // Update the current window and load orders
+    setCurrentDateWindow(nextWindow);
+    await loadOrdersForDateWindow(nextWindow, true);
   };
 
   // Filter orders based on search
@@ -167,8 +209,6 @@ export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: Mu
       order.shopName.toLowerCase().includes(searchLower)
     );
   });
-
-
 
 
   const activeShops = shops.filter(s => s.isActive);
@@ -188,11 +228,22 @@ export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: Mu
                 Loading: {loadingShops.join(', ')}
               </span>
             )}
+            
             <Button 
               variant="outline" 
               onClick={() => {
                 apiCache.clear();
-                loadAllShopsOrders();
+                // Reset to initial state and reload
+                setOrders([]);
+                setCurrentDateWindow({
+                  start: startOfDay(subDays(new Date(), 7)),
+                  end: endOfDay(new Date())
+                });
+                setOldestDateLoaded(new Date());
+                loadOrdersForDateWindow({
+                  start: startOfDay(subDays(new Date(), 7)),
+                  end: endOfDay(new Date())
+                }, false);
               }}
               disabled={loading}
               className="gap-2"
@@ -254,9 +305,13 @@ export function MultiStoreOrders({ shops, onOrderSelect, onDownloadInvoice }: Mu
       </div>
 
       {/* Orders count */}
-      <div className="text-sm text-gray-600">
-        Showing {filteredOrders.length} orders
-        {search && ` (filtered from ${orders.length} total)`}
+      <div className="flex items-center justify-between text-sm text-gray-600">
+        <span>
+          Showing {filteredOrders.length} orders
+          {search && ` (filtered from ${orders.length} total)`}
+          {' | '}
+          Date range loaded: {format(currentDateWindow.start, 'MMM dd')} - {format(currentDateWindow.end, 'MMM dd, yyyy')}
+        </span>
       </div>
 
       {/* Virtualized Orders Table */}

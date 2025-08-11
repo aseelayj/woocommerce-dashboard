@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Shop } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
-type ActiveView = 'dashboard' | 'orders' | 'settings';
+type ActiveView = 'dashboard' | 'orders' | 'settings' | 'debug';
 
 interface HeaderProps {
   activeShop: Shop | null;

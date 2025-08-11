@@ -1,4 +1,4 @@
-import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
+thimport { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { WooCommerceAPI, isUsingRealAPI } from '@/lib/api-wrapper';
 import { Shop } from '@/types';
 import { format } from 'date-fns';
